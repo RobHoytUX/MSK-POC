@@ -1,10 +1,13 @@
 import { useState, useMemo } from "react";
-import { Calendar, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw } from "lucide-react";
+import { Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { Calendar } from "./ui/calendar";
+import { format } from "date-fns";
 import ClinicalTrialsPage from "./ClinicalTrialsPage";
 import TrendingResearchPage from "./TrendingResearchPage";
 import AIPage from "./AIPage";
 import NewsFeedPanel from "./NewsFeedPanel";
+import { WaveVisualization } from './keywords-wave';
 
 interface TimelineEvent {
   id: string;
@@ -281,7 +284,7 @@ const getSeverityStyles = (severity?: "Emergency" | "Severe" | "Follow Up") => {
   return severity ? styles[severity] : "";
 };
 
-const getKeywordColor = (color: string) => {
+export const getKeywordColor = (color: string) => {
   const colors = {
     purple: "bg-purple-100 text-purple-700 border-purple-200 hover:bg-purple-200",
     blue: "bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200",
@@ -334,7 +337,12 @@ const filterEventsByRange = (events: TimelineEvent[], startMonth: number, endMon
 };
 
 export default function CancerTreatmentDashboard() {
-  const [activeTimeRange, setActiveTimeRange] = useState("1y");
+  const [activeTimeRange, setActiveTimeRange] = useState<"1m" | "3m" | "6m" | "1y" | "custom">("1y");
+  const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: undefined,
+    to: undefined,
+  });
+  const [isCustomDatePickerOpen, setIsCustomDatePickerOpen] = useState(false);
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
   const [isAIPanelVisible, setIsAIPanelVisible] = useState(false);
   const [isNewsFeedOpen, setIsNewsFeedOpen] = useState(false);
@@ -345,6 +353,7 @@ export default function CancerTreatmentDashboard() {
   const [lastUpdated, setLastUpdated] = useState("30 minutes ago");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeView, setActiveView] = useState<"timeline" | "trials" | "research" | "ai">("timeline");
+  const [showKeywordsTree, setShowKeywordsTree] = useState(false);
   const [messages, setMessages] = useState([
     {
       id: "1",
@@ -374,31 +383,49 @@ export default function CancerTreatmentDashboard() {
     let end = 11;
     let months = allMonths;
     
-    switch (activeTimeRange) {
-      case "1m":
-        start = currentMonth;
-        end = currentMonth;
-        months = [allMonths[currentMonth]];
-        break;
-      case "3m":
-        start = Math.max(0, currentMonth - 2);
-        end = currentMonth;
-        months = allMonths.slice(start, end + 1);
-        break;
-      case "6m":
-        start = Math.max(0, currentMonth - 5);
-        end = currentMonth;
-        months = allMonths.slice(start, end + 1);
-        break;
-      case "1y":
-        start = 0;
-        end = 11;
-        months = allMonths;
-        break;
+    if (activeTimeRange === "custom" && customDateRange.from && customDateRange.to) {
+      // Handle custom date range
+      // Assume all timeline events are in the current year (2024)
+      const fromMonth = customDateRange.from.getMonth();
+      const toMonth = customDateRange.to.getMonth();
+      
+      // Clamp to valid range (0-11)
+      start = Math.max(0, Math.min(11, fromMonth));
+      end = Math.max(0, Math.min(11, toMonth));
+      
+      // Ensure start <= end
+      if (start > end) {
+        [start, end] = [end, start];
+      }
+      
+      months = allMonths.slice(start, end + 1);
+    } else {
+      switch (activeTimeRange) {
+        case "1m":
+          start = currentMonth;
+          end = currentMonth;
+          months = [allMonths[currentMonth]];
+          break;
+        case "3m":
+          start = Math.max(0, currentMonth - 2);
+          end = currentMonth;
+          months = allMonths.slice(start, end + 1);
+          break;
+        case "6m":
+          start = Math.max(0, currentMonth - 5);
+          end = currentMonth;
+          months = allMonths.slice(start, end + 1);
+          break;
+        case "1y":
+          start = 0;
+          end = 11;
+          months = allMonths;
+          break;
+      }
     }
     
     return { visibleMonths: months, startMonth: start, endMonth: end };
-  }, [activeTimeRange]);
+  }, [activeTimeRange, customDateRange]);
 
   // Filter timeline data based on active time range and search/keyword filters
   const filteredData = useMemo(() => {
@@ -450,12 +477,15 @@ export default function CancerTreatmentDashboard() {
         
         <div className="flex-1 flex flex-col gap-4 pt-8">
           <button 
-            onClick={() => setActiveView("timeline")}
+            onClick={() => {
+              setActiveView("timeline");
+              setShowKeywordsTree(false);
+            }}
             className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-lg ${
-              activeView === "timeline" ? "bg-white" : "bg-white/10 hover:bg-white/20 hover:scale-110"
+              (activeView === "timeline" || showKeywordsTree) ? "bg-white" : "bg-white/10 hover:bg-white/20 hover:scale-110"
             }`}
           >
-            <Calendar className={`w-6 h-6 ${activeView === "timeline" ? "text-indigo-600" : "text-white"}`} />
+            <CalendarIcon className={`w-6 h-6 ${(activeView === "timeline" || showKeywordsTree) ? "text-indigo-600" : "text-white"}`} />
           </button>
           <button 
             onClick={() => setActiveView("trials")}
@@ -486,7 +516,11 @@ export default function CancerTreatmentDashboard() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {activeView === "timeline" ? (
+        {showKeywordsTree ? (
+          <WaveVisualization 
+            onClose={() => setShowKeywordsTree(false)} 
+          />
+        ) : activeView === "timeline" ? (
           <>
             {/* Header */}
             <div className="bg-white border-b border-gray-200 shadow-sm">
@@ -518,20 +552,89 @@ export default function CancerTreatmentDashboard() {
                 
                 {/* Time Range Selector */}
                 <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
-                    {["1m", "3m", "6m", "1y"].map((range) => (
-                      <button
-                        key={range}
-                        onClick={() => setActiveTimeRange(range)}
-                        className={`px-4 py-1.5 rounded-md transition-all ${
-                          activeTimeRange === range
-                            ? "bg-white shadow-sm text-gray-900"
-                            : "text-gray-600 hover:text-gray-900"
-                        }`}
-                      >
-                        {range}
-                      </button>
-                    ))}
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+                      {(["1m", "3m", "6m", "1y"] as const).map((range) => (
+                        <button
+                          key={range}
+                          onClick={() => {
+                            setActiveTimeRange(range);
+                            setIsCustomDatePickerOpen(false);
+                          }}
+                          className={`px-4 py-1.5 rounded-md transition-all ${
+                            activeTimeRange === range
+                              ? "bg-white shadow-sm text-gray-900"
+                              : "text-gray-600 hover:text-gray-900"
+                          }`}
+                        >
+                          {range}
+                        </button>
+                      ))}
+                    </div>
+                    
+                    {/* Custom Date Range Picker */}
+                    <Popover open={isCustomDatePickerOpen} onOpenChange={setIsCustomDatePickerOpen}>
+                      <PopoverTrigger asChild>
+                        <button
+                          onClick={() => {
+                            setActiveTimeRange("custom");
+                            setIsCustomDatePickerOpen(true);
+                          }}
+                          className={`px-4 py-1.5 rounded-lg transition-all flex items-center gap-2 ${
+                            activeTimeRange === "custom"
+                              ? "bg-indigo-600 text-white shadow-sm"
+                              : "bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+                          }`}
+                        >
+                          <CalendarDays className="w-4 h-4" />
+                          {customDateRange.from && customDateRange.to ? (
+                            <>
+                              {format(customDateRange.from, "MMM d")} - {format(customDateRange.to, "MMM d")}
+                            </>
+                          ) : (
+                            "Custom Range"
+                          )}
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <div className="p-4">
+                          <Calendar
+                            mode="range"
+                            selected={{ from: customDateRange.from, to: customDateRange.to }}
+                            onSelect={(range) => {
+                              if (range?.from && range?.to) {
+                                setCustomDateRange({ from: range.from, to: range.to });
+                                setActiveTimeRange("custom");
+                                setIsCustomDatePickerOpen(false);
+                              } else if (range?.from) {
+                                setCustomDateRange({ from: range.from, to: undefined });
+                              }
+                            }}
+                            numberOfMonths={2}
+                            className="rounded-md border-0"
+                          />
+                          {customDateRange.from && customDateRange.to && (
+                            <div className="mt-4 pt-4 border-t border-gray-200 flex items-center justify-between gap-2">
+                              <div className="text-sm text-gray-600">
+                                <span className="font-medium">From:</span> {format(customDateRange.from, "MMM d, yyyy")}
+                                <br />
+                                <span className="font-medium">To:</span> {format(customDateRange.to, "MMM d, yyyy")}
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setCustomDateRange({ from: undefined, to: undefined });
+                                  setActiveTimeRange("1y");
+                                  setIsCustomDatePickerOpen(false);
+                                }}
+                                className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   
                   <div className="flex items-center gap-3">
@@ -848,63 +951,17 @@ export default function CancerTreatmentDashboard() {
                       </div>
                     </div>
                   </div>
-
-                  {/* Documentation Row */}
-                  <div className="border-b border-gray-200 py-6">
-                    <div className="flex items-center">
-                      <div className="w-40 pr-6">
-                        <h3 className="text-gray-900 mb-1">Documentation</h3>
-                        <p className="text-gray-500 text-sm">Forms & records</p>
-                      </div>
-                      <div className="flex-1 relative h-16">
-                        {/* Timeline line */}
-                        <div className="absolute top-1/2 left-0 right-0 h-1 bg-rose-200 rounded-full" />
-                        
-                        {/* Events */}
-                        {filteredData.documentation.map((event) => {
-                          const position = getDatePosition(event.date, visibleMonths, startMonth);
-                          if (position < 0) return null;
-                          
-                          return (
-                            <Popover key={event.id}>
-                              <PopoverTrigger asChild>
-                                <button
-                                  className="absolute top-1/2 -translate-y-1/2 group"
-                                  style={{ left: `${position}%` }}
-                                >
-                                  <div className="w-4 h-4 bg-rose-600 rounded-full shadow-lg group-hover:scale-150 transition-transform" />
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-96" side="top" align="center">
-                                <div className="space-y-3">
-                                  <div>
-                                    <h4 className="text-gray-900 mb-1">{event.title}</h4>
-                                    <p className="text-gray-500 text-sm">{event.date} • {event.description}</p>
-                                  </div>
-                                  <div className="bg-gray-50 rounded-lg p-4">
-                                    <p className="text-gray-600 text-sm leading-relaxed">{event.details}</p>
-                                  </div>
-                                  <div className="pt-2 border-t border-gray-200">
-                                    <button className="text-indigo-600 hover:text-indigo-700 text-sm transition-colors inline-flex items-center gap-1">
-                                      View Documentation →
-                                    </button>
-                                  </div>
-                                </div>
-                              </PopoverContent>
-                            </Popover>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
                 {/* Keywords Section */}
-                <div className="mt-8 pt-6 border-t border-gray-200">
+                <div className="mt-8 pt-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <h3 className="text-gray-900">Smart Keywords</h3>
-                      <button className="text-indigo-600 hover:text-indigo-700 text-sm transition-colors">
+                      <button 
+                        onClick={() => setShowKeywordsTree(true)}
+                        className="text-indigo-600 hover:text-indigo-700 text-sm transition-colors"
+                      >
                         View all keywords
                       </button>
                     </div>
