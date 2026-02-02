@@ -27,7 +27,7 @@
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules", "dist", "vite.config.ts", "imports/Variant1HomeKeywords1.tsx"],
+  "exclude": ["node_modules", "dist", "vite.config.ts", "imports/Variant1HomeKeywords1.tsx", "components/keywords"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
 

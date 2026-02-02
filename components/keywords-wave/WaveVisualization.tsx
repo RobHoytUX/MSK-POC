@@ -440,35 +440,35 @@ export function WaveVisualization({ onClose }: WaveVisualizationProps) {
     setShowVoicePopup(false);
   };
 
-  const getNodeDetails = (nodeId: string) => {
-    let node: Node | null = null;
+  const getNodeDetails = (nodeId: string): { node: Node; columnTitle: string; columnIndex: number; connectedNodes: Array<{ node: Node; column: string; columnIndex: number }> } | null => {
+    let foundNode: Node | undefined;
     let columnTitle = '';
     let columnIndex = 0;
     
     medicalData.forEach((column, colIdx) => {
-      const foundNode = column.nodes.find(n => n.id === nodeId);
-      if (foundNode) {
-        node = foundNode;
+      const node = column.nodes.find(n => n.id === nodeId);
+      if (node) {
+        foundNode = node;
         columnTitle = column.title;
         columnIndex = colIdx;
       }
     });
 
-    if (!node) return null;
+    if (!foundNode) return null;
 
     const connections = getConnections(nodeId);
     const connectedNodes: Array<{ node: Node; column: string; columnIndex: number }> = [];
     
     connections.forEach(connId => {
       medicalData.forEach((column, colIdx) => {
-        const foundNode = column.nodes.find(n => n.id === connId);
-        if (foundNode) {
-          connectedNodes.push({ node: foundNode, column: column.title, columnIndex: colIdx });
+        const node = column.nodes.find(n => n.id === connId);
+        if (node) {
+          connectedNodes.push({ node, column: column.title, columnIndex: colIdx });
         }
       });
     });
 
-    return { node, columnTitle, columnIndex, connectedNodes };
+    return { node: foundNode, columnTitle, columnIndex, connectedNodes };
   };
 
   const columnWidth = 180;
