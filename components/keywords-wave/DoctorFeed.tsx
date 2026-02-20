@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { UserCircle, Heart, Share2, Repeat, ArrowLeft, X, Search, Filter } from 'lucide-react';
+import { UserCircle, Heart, Share2, Repeat, ArrowLeft, X, Search, Filter, MessageCircle, Send } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase, Comment, Profile } from '../../lib/supabase';
+import { useAuth } from '../../lib/AuthContext';
 
 interface Doctor {
   id: number;
@@ -32,6 +34,11 @@ interface Post {
   shares: number;
   reposts: number;
   isRepostedByYou?: boolean;
+  supabasePostId?: string;
+}
+
+interface CommentWithProfile extends Comment {
+  profiles?: Profile;
 }
 
 const mockDoctors: Doctor[] = [
@@ -232,12 +239,17 @@ interface DoctorFeedProps {
 }
 
 export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick, focusedDoctorId, focusedPostId }: DoctorFeedProps) {
+  const { user, profile } = useAuth();
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   const [posts, setPosts] = useState<Post[]>(mockPosts);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState<Post['type'][]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'default' | 'focusedPost' | 'doctorPosts'>('default');
+  const [expandedComments, setExpandedComments] = useState<Set<number>>(new Set());
+  const [commentsByPost, setCommentsByPost] = useState<Record<string, CommentWithProfile[]>>({});
+  const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
+  const [loadingComments, setLoadingComments] = useState<Set<number>>(new Set());
 
   // Handle initial focus on doctor/post when opened
   useEffect(() => {
@@ -259,6 +271,110 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
       setViewMode('default');
     }
   }, [focusedDoctorId, focusedPostId, isOpen]);
+
+  const getPostKey = (postId: number) => `mock-post-${postId}`;
+
+  const fetchComments = async (postId: number) => {
+    const key = getPostKey(postId);
+    setLoadingComments(prev => new Set(prev).add(postId));
+    try {
+      const { data } = await supabase
+        .from('comments')
+        .select('*, profiles(*)')
+        .eq('post_id', key)
+        .order('created_at', { ascending: true });
+      if (data) {
+        setCommentsByPost(prev => ({ ...prev, [key]: data as any }));
+      }
+    } catch {
+      // Supabase tables may not exist yet — gracefully handle
+    }
+    setLoadingComments(prev => { const s = new Set(prev); s.delete(postId); return s; });
+  };
+
+  const toggleComments = (postId: number) => {
+    const newExpanded = new Set(expandedComments);
+    if (newExpanded.has(postId)) {
+      newExpanded.delete(postId);
+    } else {
+      newExpanded.add(postId);
+      fetchComments(postId);
+    }
+    setExpandedComments(newExpanded);
+  };
+
+  const handleSubmitComment = async (postId: number) => {
+    const content = commentInputs[postId]?.trim();
+    if (!content || !user || !profile) return;
+
+    const key = getPostKey(postId);
+
+    const newComment: CommentWithProfile = {
+      id: `temp-${Date.now()}`,
+      post_id: key,
+      author_id: user.id,
+      content,
+      created_at: new Date().toISOString(),
+      profiles: profile,
+    };
+
+    setCommentsByPost(prev => ({
+      ...prev,
+      [key]: [...(prev[key] || []), newComment],
+    }));
+    setCommentInputs(prev => ({ ...prev, [postId]: '' }));
+
+    try {
+      const { data } = await supabase
+        .from('comments')
+        .insert({ post_id: key, author_id: user.id, content })
+        .select('*, profiles(*)')
+        .single();
+
+      if (data) {
+        setCommentsByPost(prev => ({
+          ...prev,
+          [key]: (prev[key] || []).map(c => c.id === newComment.id ? (data as any) : c),
+        }));
+
+        const post = posts.find(p => p.id === postId);
+        if (post) {
+          const mockDoctorUserIds: Record<number, string> = {};
+          try {
+            const { data: profiles } = await supabase
+              .from('profiles')
+              .select('id, full_name')
+              .neq('id', user.id)
+              .limit(10);
+            if (profiles && profiles.length > 0) {
+              profiles.forEach((p: any) => {
+                const doctor = mockDoctors.find(d =>
+                  p.full_name?.toLowerCase().includes(d.name.split(' ').pop()?.toLowerCase() || '')
+                );
+                if (doctor) mockDoctorUserIds[doctor.id] = p.id;
+              });
+            }
+          } catch { /* ignore */ }
+
+          const targetUserId = mockDoctorUserIds[post.doctorId];
+          if (targetUserId && targetUserId !== user.id) {
+            await supabase.from('notifications').insert({
+              user_id: targetUserId,
+              from_user_id: user.id,
+              type: 'comment',
+              post_id: key,
+              comment_id: (data as any).id,
+              message: `${profile.full_name} commented on your post: "${content.slice(0, 80)}${content.length > 80 ? '...' : ''}"`,
+            }).then(() => {}, () => {});
+          }
+        }
+      }
+
+      toast.success('Comment posted!');
+    } catch {
+      toast.error('Failed to post comment. Make sure Supabase is configured.');
+    }
+  };
 
   const handleLike = (postId: number) => {
     setPosts(prevPosts =>
@@ -731,6 +847,20 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                         </button>
 
                         <button
+                          onClick={() => toggleComments(post.id)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                            expandedComments.has(post.id)
+                              ? 'bg-blue-50 text-blue-600'
+                              : 'text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                          <span className="text-xs font-medium">
+                            {(commentsByPost[getPostKey(post.id)] || []).length || 'Comment'}
+                          </span>
+                        </button>
+
+                        <button
                           onClick={() => handleShare(post.id)}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-50 transition-all"
                         >
@@ -746,6 +876,80 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                           <span className="text-xs font-medium">{post.reposts}</span>
                         </button>
                       </div>
+
+                      {/* Comments Section */}
+                      <AnimatePresence>
+                        {expandedComments.has(post.id) && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden border-t border-gray-100"
+                          >
+                            <div className="px-4 py-3 space-y-3">
+                              {loadingComments.has(post.id) ? (
+                                <div className="flex justify-center py-3">
+                                  <div className="w-5 h-5 border-2 border-gray-200 border-t-indigo-600 rounded-full animate-spin" />
+                                </div>
+                              ) : (
+                                <>
+                                  {(commentsByPost[getPostKey(post.id)] || []).length === 0 ? (
+                                    <p className="text-xs text-gray-400 text-center py-2">No comments yet. Be the first!</p>
+                                  ) : (
+                                    <div className="space-y-3 max-h-48 overflow-y-auto">
+                                      {(commentsByPost[getPostKey(post.id)] || []).map((comment) => (
+                                        <div key={comment.id} className="flex items-start gap-2">
+                                          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                                            {comment.profiles?.avatar_initials || '?'}
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-baseline gap-2">
+                                              <span className="text-xs font-semibold text-gray-900">
+                                                {comment.profiles?.full_name || 'Anonymous'}
+                                              </span>
+                                              <span className="text-[10px] text-gray-400">
+                                                {new Date(comment.created_at).toLocaleDateString()}
+                                              </span>
+                                            </div>
+                                            <p className="text-xs text-gray-700 leading-relaxed mt-0.5">{comment.content}</p>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                                      {profile?.avatar_initials || 'U'}
+                                    </div>
+                                    <input
+                                      type="text"
+                                      placeholder="Write a comment..."
+                                      value={commentInputs[post.id] || ''}
+                                      onChange={(e) => setCommentInputs(prev => ({ ...prev, [post.id]: e.target.value }))}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                          e.preventDefault();
+                                          handleSubmitComment(post.id);
+                                        }
+                                      }}
+                                      className="flex-1 px-3 py-1.5 text-xs border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    />
+                                    <button
+                                      onClick={() => handleSubmitComment(post.id)}
+                                      disabled={!commentInputs[post.id]?.trim()}
+                                      className="p-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-200 text-white disabled:text-gray-400 rounded-full transition-colors"
+                                    >
+                                      <Send className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </motion.div>
                   ))
                 )}

@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays } from "lucide-react";
+import { Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays, Bell } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Calendar } from "./ui/calendar";
 import { format } from "date-fns";
@@ -8,6 +8,9 @@ import TrendingResearchPage from "./TrendingResearchPage";
 import AIPage from "./AIPage";
 import NewsFeedPanel from "./NewsFeedPanel";
 import { WaveVisualization } from './keywords-wave';
+import { useAuth } from '../lib/AuthContext';
+import ProfilePanel from './ProfilePanel';
+import NotificationsPanel from './NotificationsPanel';
 
 interface TimelineEvent {
   id: string;
@@ -337,6 +340,9 @@ const filterEventsByRange = (events: TimelineEvent[], startMonth: number, endMon
 };
 
 export default function CancerTreatmentDashboard() {
+  const { profile } = useAuth();
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [activeTimeRange, setActiveTimeRange] = useState<"1m" | "3m" | "6m" | "1y" | "custom">("1y");
   const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
@@ -530,23 +536,39 @@ export default function CancerTreatmentDashboard() {
                     <h1 className="text-gray-900 mb-1">Patient Timeline</h1>
                     <p className="text-gray-500">Track treatment progress and key milestones</p>
                   </div>
-                  <div className="relative w-96">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Search timeline"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    />
-                    {searchQuery && (
-                      <button
-                        onClick={() => setSearchQuery("")}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors"
-                      >
-                        <X className="w-4 h-4 text-gray-600" />
-                      </button>
-                    )}
+                  <div className="flex items-center gap-4">
+                    <div className="relative w-96">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search timeline"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      />
+                      {searchQuery && (
+                        <button
+                          onClick={() => setSearchQuery("")}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors"
+                        >
+                          <X className="w-4 h-4 text-gray-600" />
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setIsNotificationsOpen(true)}
+                      className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
+                      title="Notifications"
+                    >
+                      <Bell className="w-5 h-5 text-gray-600" />
+                    </button>
+                    <button
+                      onClick={() => setIsProfileOpen(true)}
+                      className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-sm font-bold hover:scale-105 transition-transform shadow-md"
+                      title="My Profile"
+                    >
+                      {profile?.avatar_initials || 'U'}
+                    </button>
                   </div>
                 </div>
                 
@@ -1024,11 +1046,65 @@ export default function CancerTreatmentDashboard() {
             </div>
           </>
         ) : activeView === "trials" ? (
-          <ClinicalTrialsPage onClose={() => setActiveView("timeline")} />
+          <div className="relative h-full">
+            <ClinicalTrialsPage onClose={() => setActiveView("timeline")} />
+            <div className="absolute top-5 right-8 flex items-center gap-3 z-10">
+              <button
+                onClick={() => setIsNotificationsOpen(true)}
+                className="p-2 bg-white hover:bg-gray-100 rounded-full transition-colors shadow-sm border border-gray-200"
+                title="Notifications"
+              >
+                <Bell className="w-5 h-5 text-gray-600" />
+              </button>
+              <button
+                onClick={() => setIsProfileOpen(true)}
+                className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-sm font-bold hover:scale-105 transition-transform shadow-md"
+                title="My Profile"
+              >
+                {profile?.avatar_initials || 'U'}
+              </button>
+            </div>
+          </div>
         ) : activeView === "research" ? (
-          <TrendingResearchPage onClose={() => setActiveView("timeline")} />
+          <div className="relative h-full">
+            <TrendingResearchPage onClose={() => setActiveView("timeline")} />
+            <div className="absolute top-5 right-8 flex items-center gap-3 z-10">
+              <button
+                onClick={() => setIsNotificationsOpen(true)}
+                className="p-2 bg-white hover:bg-gray-100 rounded-full transition-colors shadow-sm border border-gray-200"
+                title="Notifications"
+              >
+                <Bell className="w-5 h-5 text-gray-600" />
+              </button>
+              <button
+                onClick={() => setIsProfileOpen(true)}
+                className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-sm font-bold hover:scale-105 transition-transform shadow-md"
+                title="My Profile"
+              >
+                {profile?.avatar_initials || 'U'}
+              </button>
+            </div>
+          </div>
         ) : (
-          <AIPage onClose={() => setActiveView("timeline")} />
+          <div className="relative h-full">
+            <AIPage onClose={() => setActiveView("timeline")} />
+            <div className="absolute top-5 right-8 flex items-center gap-3 z-10">
+              <button
+                onClick={() => setIsNotificationsOpen(true)}
+                className="p-2 bg-white hover:bg-gray-100 rounded-full transition-colors shadow-sm border border-gray-200"
+                title="Notifications"
+              >
+                <Bell className="w-5 h-5 text-gray-600" />
+              </button>
+              <button
+                onClick={() => setIsProfileOpen(true)}
+                className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-sm font-bold hover:scale-105 transition-transform shadow-md"
+                title="My Profile"
+              >
+                {profile?.avatar_initials || 'U'}
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
@@ -1183,6 +1259,12 @@ export default function CancerTreatmentDashboard() {
 
       {/* News Feed Side Panel */}
       <NewsFeedPanel isOpen={isNewsFeedOpen} onClose={() => setIsNewsFeedOpen(false)} />
+
+      {/* Profile Panel */}
+      <ProfilePanel isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
+
+      {/* Notifications Panel */}
+      <NotificationsPanel isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} />
     </div>
   );
 }

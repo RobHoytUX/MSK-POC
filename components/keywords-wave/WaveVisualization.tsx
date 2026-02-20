@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Bell } from 'lucide-react';
 import { ShareModal } from './ShareModal';
 import { SaveModal } from './SaveModal';
 import { QuantumPanel } from './QuantumPanel';
@@ -10,6 +10,9 @@ import { PostToFeedModal } from './PostToFeedModal';
 import { DoctorConnectionBanner } from './DoctorConnectionBanner';
 import { ClinicalNotesModal } from './ClinicalNotesModal';
 import { toast } from 'sonner';
+import { useAuth } from '../../lib/AuthContext';
+import ProfilePanel from '../ProfilePanel';
+import NotificationsPanel from '../NotificationsPanel';
 
 interface Node {
   id: string;
@@ -105,6 +108,9 @@ const medicalData: Column[] = [
 ];
 
 export function WaveVisualization({ onClose }: WaveVisualizationProps) {
+  const { profile } = useAuth();
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set());
   const [focusedNode, setFocusedNode] = useState<string | null>(null);
@@ -672,6 +678,21 @@ export function WaveVisualization({ onClose }: WaveVisualizationProps) {
                   </button>
                 </>
               )}
+              <div className="h-6 w-px bg-gray-200" />
+              <button
+                onClick={() => setIsNotificationsOpen(true)}
+                className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
+                title="Notifications"
+              >
+                <Bell className="w-5 h-5 text-gray-600" />
+              </button>
+              <button
+                onClick={() => setIsProfileOpen(true)}
+                className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-sm font-bold hover:scale-105 transition-transform shadow-md"
+                title="My Profile"
+              >
+                {profile?.avatar_initials || 'U'}
+              </button>
             </div>
           </div>
         </div>
@@ -1571,6 +1592,9 @@ export function WaveVisualization({ onClose }: WaveVisualizationProps) {
         initialNote={notesTarget?.type === 'node' ? nodeNotes[notesTarget.id] : connectionNotes[notesTarget?.id || '']}
         onSave={handleSaveNotes}
       />
+
+      <ProfilePanel isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
+      <NotificationsPanel isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} />
     </div>
   );
 }
