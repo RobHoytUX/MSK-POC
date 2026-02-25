@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, fullName: string, specialty: string, institution: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -74,31 +74,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           full_name: fullName,
           avatar_initials: getInitials(fullName),
         },
-        emailRedirectTo: window.location.origin,
       },
     });
 
-    if (!error) {
-      const { data: { user: newUser } } = await supabase.auth.getUser();
-      if (newUser) {
-        await supabase.from('profiles').upsert({
-          id: newUser.id,
-          email,
-          full_name: fullName,
-          specialty,
-          institution,
-          avatar_initials: getInitials(fullName),
-        });
-        await fetchProfile(newUser.id);
+    if (error) return { error: error as Error | null };
+
+    const newUser = data?.user;
+    const newSession = data?.session;
+    if (newUser) {
+      const { error: profileError } = await supabase.rpc('create_profile', {
+        user_id: newUser.id,
+        user_email: email,
+        user_full_name: fullName,
+        user_specialty: specialty,
+        user_institution: institution,
+        user_avatar_initials: getInitials(fullName),
+      });
+      if (profileError) {
+        return { error: new Error('Account created but failed to save profile: ' + profileError.message) };
+      }
+      await fetchProfile(newUser.id);
+
+      if (newSession) {
+        setSession(newSession);
+        setUser(newUser);
       }
     }
 
-    return { error: error as Error | null };
+    return { error: null };
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error as Error | null };
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { error: error as Error | null };
+
+    if (data?.user) {
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', data.user.id)
+        .single();
+
+      if (!existingProfile) {
+        const name = data.user.user_metadata?.full_name || email.split('@')[0];
+        const initials = name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+        await supabase.rpc('create_profile', {
+          user_id: data.user.id,
+          user_email: email,
+          user_full_name: name,
+          user_specialty: '',
+          user_institution: '',
+          user_avatar_initials: initials,
+        }).then(() => {}, () => {});
+      }
+    }
+
+    return { error: null };
   };
 
   const signOut = async () => {

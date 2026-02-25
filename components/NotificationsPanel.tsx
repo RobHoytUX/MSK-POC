@@ -7,9 +7,10 @@ import { supabase, Notification } from '../lib/supabase';
 interface NotificationsPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  onNotificationClick?: (postId: string) => void;
 }
 
-export default function NotificationsPanel({ isOpen, onClose }: NotificationsPanelProps) {
+export default function NotificationsPanel({ isOpen, onClose, onNotificationClick }: NotificationsPanelProps) {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -19,7 +20,7 @@ export default function NotificationsPanel({ isOpen, onClose }: NotificationsPan
     setLoading(true);
     const { data } = await supabase
       .from('notifications')
-      .select('*, from_profile:profiles!notifications_from_user_id_fkey(*)')
+      .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(50);
@@ -142,7 +143,13 @@ export default function NotificationsPanel({ isOpen, onClose }: NotificationsPan
               {notifications.map((notification) => (
                 <button
                   key={notification.id}
-                  onClick={() => !notification.read && markAsRead(notification.id)}
+                  onClick={() => {
+                    if (!notification.read) markAsRead(notification.id);
+                    if (notification.post_id && onNotificationClick) {
+                      onNotificationClick(notification.post_id);
+                      onClose();
+                    }
+                  }}
                   className={`w-full text-left px-6 py-4 hover:bg-gray-50 transition-colors ${
                     !notification.read ? 'bg-indigo-50/50' : ''
                   }`}

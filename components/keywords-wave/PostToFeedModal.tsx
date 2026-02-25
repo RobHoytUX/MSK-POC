@@ -3,35 +3,63 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Send, FileText, BookOpen, Link as LinkIcon, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../lib/AuthContext';
 
 interface PostToFeedModalProps {
   isOpen: boolean;
   onClose: () => void;
   connectionTitle?: string;
+  onPostCreated?: () => void;
 }
 
-export function PostToFeedModal({ isOpen, onClose, connectionTitle }: PostToFeedModalProps) {
+export function PostToFeedModal({ isOpen, onClose, connectionTitle, onPostCreated }: PostToFeedModalProps) {
+  const { user } = useAuth();
   const [postType, setPostType] = useState<'finding' | 'research' | 'article' | 'connection'>('finding');
   const [content, setContent] = useState('');
   const [attachmentTitle, setAttachmentTitle] = useState('');
   const [attachmentDescription, setAttachmentDescription] = useState('');
+  const [isPosting, setIsPosting] = useState(false);
 
-  const handlePost = () => {
+  const handlePost = async () => {
     if (!content.trim()) {
       toast.error('Please write something before posting');
       return;
     }
+    if (!user) {
+      toast.error('You must be signed in to post');
+      return;
+    }
 
-    // In a real app, this would send the post to the backend
+    setIsPosting(true);
+
+    const attachments = (postType === 'research' || postType === 'article' || postType === 'connection') && attachmentTitle.trim()
+      ? [{ title: attachmentTitle.trim(), description: attachmentDescription.trim() || undefined }]
+      : null;
+
+    const { error } = await supabase.from('doctor_posts').insert({
+      author_id: user.id,
+      type: postType,
+      content: content.trim(),
+      attachments,
+    });
+
+    setIsPosting(false);
+
+    if (error) {
+      toast.error('Failed to post: ' + error.message);
+      return;
+    }
+
     toast.success('Posted to Doctor Network!', {
       description: `Your ${getPostTypeLabel(postType).toLowerCase()} has been shared`,
       duration: 3000,
     });
 
-    // Reset form
     setContent('');
     setAttachmentTitle('');
     setAttachmentDescription('');
+    onPostCreated?.();
     onClose();
   };
 
@@ -242,15 +270,19 @@ export function PostToFeedModal({ isOpen, onClose, connectionTitle }: PostToFeed
                 </button>
                 <button
                   onClick={handlePost}
-                  disabled={!content.trim()}
+                  disabled={!content.trim() || isPosting}
                   className={`flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg transition-all ${
-                    content.trim()
+                    content.trim() && !isPosting
                       ? `bg-gradient-to-r ${getPostTypeColor(postType)} hover:shadow-lg`
                       : 'bg-gray-300 cursor-not-allowed'
                   }`}
                 >
-                  <Send className="w-4 h-4" />
-                  Post to Network
+                  {isPosting ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                  {isPosting ? 'Posting...' : 'Post to Network'}
                 </button>
               </div>
             </div>

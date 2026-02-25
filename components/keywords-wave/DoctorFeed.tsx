@@ -236,9 +236,11 @@ interface DoctorFeedProps {
   onConnectionClick?: (connection: { title: string; description?: string }, doctorInfo?: { name: string; avatar: string; specialty: string; doctorId: number; postId: number }) => void;
   focusedDoctorId?: number | null;
   focusedPostId?: number | null;
+  refreshTrigger?: number;
+  highlightSupabasePostId?: string | null;
 }
 
-export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick, focusedDoctorId, focusedPostId }: DoctorFeedProps) {
+export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick, focusedDoctorId, focusedPostId, refreshTrigger, highlightSupabasePostId }: DoctorFeedProps) {
   const { user, profile } = useAuth();
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   const [posts, setPosts] = useState<Post[]>(mockPosts);
@@ -250,18 +252,144 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
   const [commentsByPost, setCommentsByPost] = useState<Record<string, CommentWithProfile[]>>({});
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
   const [loadingComments, setLoadingComments] = useState<Set<number>>(new Set());
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+
+  const timeAgo = (dateStr: string) => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ago`;
+  };
+
+  const fetchSupabasePosts = async () => {
+    const { data: postsData, error: postsError } = await supabase
+      .from('doctor_posts')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (postsError || !postsData || postsData.length === 0) {
+      return;
+    }
+
+    const authorIds = [...new Set(postsData.map((p: any) => p.author_id))];
+    const { data: profilesData } = await supabase
+      .from('profiles')
+      .select('*')
+      .in('id', authorIds);
+
+    const profilesMap: Record<string, any> = {};
+    if (profilesData) {
+      profilesData.forEach((p: any) => { profilesMap[p.id] = p; });
+    }
+
+    // Fetch comment counts for all posts
+    const postIds = postsData.map((p: any) => p.id);
+    const { data: commentsData } = await supabase
+      .from('comments')
+      .select('post_id')
+      .in('post_id', postIds);
+
+    const counts: Record<string, number> = {};
+    if (commentsData) {
+      commentsData.forEach((c: any) => {
+        counts[c.post_id] = (counts[c.post_id] || 0) + 1;
+      });
+    }
+    setCommentCounts(prev => ({ ...prev, ...counts }));
+
+    const realPosts: Post[] = postsData.map((p: any, idx: number) => {
+      const authorProfile = profilesMap[p.author_id];
+      return {
+        id: 10000 + idx,
+        doctorId: -1,
+        doctorName: authorProfile?.full_name || 'Doctor',
+        doctorAvatar: authorProfile?.avatar_initials || 'U',
+        doctorSpecialty: authorProfile?.specialty || 'Physician',
+        timestamp: timeAgo(p.created_at),
+        type: p.type as Post['type'],
+        content: p.content,
+        attachments: p.attachments || undefined,
+        likes: p.likes_count || 0,
+        liked: false,
+        shares: p.shares_count || 0,
+        reposts: p.reposts_count || 0,
+        supabasePostId: p.id,
+      };
+    });
+    setPosts([...realPosts, ...mockPosts]);
+  };
+
+  useEffect(() => {
+    if (isOpen) fetchSupabasePosts();
+  }, [isOpen, refreshTrigger]);
+
+  // Real-time comment subscription: new comments appear instantly for all users
+  useEffect(() => {
+    const channel = supabase
+      .channel('realtime-comments')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'comments',
+      }, async (payload: any) => {
+        const newCommentPostId = payload.new?.post_id;
+        if (!newCommentPostId) return;
+
+        // Fetch the full comment with profile
+        const { data } = await supabase
+          .from('comments')
+          .select('*')
+          .eq('id', payload.new.id)
+          .single();
+
+        if (!data) return;
+
+        const { data: commentProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.author_id)
+          .single();
+
+        const commentWithProfile: CommentWithProfile = {
+          ...data,
+          profiles: commentProfile || undefined,
+        };
+
+        // Find the comment key for this post
+        const matchingPost = posts.find(p => p.supabasePostId === newCommentPostId);
+        if (!matchingPost) return;
+        const key = matchingPost.supabasePostId || `mock-post-${matchingPost.id}`;
+
+        // Only add if not already present (avoid duplicates from our own insert)
+        setCommentsByPost(prev => {
+          const existing = prev[key] || [];
+          if (existing.some(c => c.id === commentWithProfile.id)) return prev;
+          return { ...prev, [key]: [...existing, commentWithProfile] };
+        });
+        // Update the count
+        setCommentCounts(prev => ({
+          ...prev,
+          [newCommentPostId]: (prev[newCommentPostId] || 0) + 1,
+        }));
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [posts]);
 
   // Handle initial focus on doctor/post when opened
   useEffect(() => {
     if (focusedDoctorId && focusedPostId) {
-      // Show only the specific post
       setViewMode('focusedPost');
       const doctor = mockDoctors.find(d => d.id === focusedDoctorId);
       if (doctor) {
         setSelectedDoctor(doctor);
       }
     } else if (focusedDoctorId) {
-      // Show all posts from doctor
       setViewMode('doctorPosts');
       const doctor = mockDoctors.find(d => d.id === focusedDoctorId);
       if (doctor) {
@@ -272,22 +400,54 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
     }
   }, [focusedDoctorId, focusedPostId, isOpen]);
 
-  const getPostKey = (postId: number) => `mock-post-${postId}`;
+  // Auto-expand comments when navigating from a notification
+  useEffect(() => {
+    if (highlightSupabasePostId && posts.length > 0) {
+      const targetPost = posts.find(p => p.supabasePostId === highlightSupabasePostId);
+      if (targetPost) {
+        setSelectedDoctor(null);
+        setViewMode('default');
+        const newExpanded = new Set(expandedComments);
+        newExpanded.add(targetPost.id);
+        setExpandedComments(newExpanded);
+        fetchComments(targetPost.id);
+        // Scroll to the post after a brief delay
+        setTimeout(() => {
+          const el = document.getElementById(`post-${targetPost.id}`);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 300);
+      }
+    }
+  }, [highlightSupabasePostId, posts]);
+
+  const getSupabasePostId = (postId: number) => {
+    const post = posts.find(p => p.id === postId);
+    return post?.supabasePostId || null;
+  };
+
+  const getCommentKey = (postId: number) => {
+    return getSupabasePostId(postId) || `mock-post-${postId}`;
+  };
 
   const fetchComments = async (postId: number) => {
-    const key = getPostKey(postId);
+    const supabaseId = getSupabasePostId(postId);
+    if (!supabaseId) {
+      setLoadingComments(prev => { const s = new Set(prev); s.delete(postId); return s; });
+      return;
+    }
+    const key = getCommentKey(postId);
     setLoadingComments(prev => new Set(prev).add(postId));
     try {
       const { data } = await supabase
         .from('comments')
         .select('*, profiles(*)')
-        .eq('post_id', key)
+        .eq('post_id', supabaseId)
         .order('created_at', { ascending: true });
       if (data) {
         setCommentsByPost(prev => ({ ...prev, [key]: data as any }));
       }
     } catch {
-      // Supabase tables may not exist yet — gracefully handle
+      // gracefully handle
     }
     setLoadingComments(prev => { const s = new Set(prev); s.delete(postId); return s; });
   };
@@ -307,11 +467,17 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
     const content = commentInputs[postId]?.trim();
     if (!content || !user || !profile) return;
 
-    const key = getPostKey(postId);
+    const supabaseId = getSupabasePostId(postId);
+    if (!supabaseId) {
+      toast.error('Comments are only supported on real posts');
+      return;
+    }
+
+    const key = getCommentKey(postId);
 
     const newComment: CommentWithProfile = {
       id: `temp-${Date.now()}`,
-      post_id: key,
+      post_id: supabaseId,
       author_id: user.id,
       content,
       created_at: new Date().toISOString(),
@@ -327,7 +493,7 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
     try {
       const { data } = await supabase
         .from('comments')
-        .insert({ post_id: key, author_id: user.id, content })
+        .insert({ post_id: supabaseId, author_id: user.id, content })
         .select('*, profiles(*)')
         .single();
 
@@ -338,41 +504,52 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
         }));
 
         const post = posts.find(p => p.id === postId);
-        if (post) {
-          const mockDoctorUserIds: Record<number, string> = {};
-          try {
-            const { data: profiles } = await supabase
-              .from('profiles')
-              .select('id, full_name')
-              .neq('id', user.id)
-              .limit(10);
-            if (profiles && profiles.length > 0) {
-              profiles.forEach((p: any) => {
-                const doctor = mockDoctors.find(d =>
-                  p.full_name?.toLowerCase().includes(d.name.split(' ').pop()?.toLowerCase() || '')
-                );
-                if (doctor) mockDoctorUserIds[doctor.id] = p.id;
-              });
-            }
-          } catch { /* ignore */ }
+        if (post && post.supabasePostId) {
+          // Get post author
+          const { data: postData } = await supabase
+            .from('doctor_posts')
+            .select('author_id')
+            .eq('id', post.supabasePostId)
+            .single();
 
-          const targetUserId = mockDoctorUserIds[post.doctorId];
-          if (targetUserId && targetUserId !== user.id) {
-            await supabase.from('notifications').insert({
-              user_id: targetUserId,
-              from_user_id: user.id,
-              type: 'comment',
-              post_id: key,
-              comment_id: (data as any).id,
-              message: `${profile.full_name} commented on your post: "${content.slice(0, 80)}${content.length > 80 ? '...' : ''}"`,
-            }).then(() => {}, () => {});
+          // Get all other commenters on this post
+          const { data: otherComments } = await supabase
+            .from('comments')
+            .select('author_id')
+            .eq('post_id', post.supabasePostId)
+            .neq('author_id', user.id);
+
+          const usersToNotify = new Set<string>();
+          if (postData && postData.author_id !== user.id) {
+            usersToNotify.add(postData.author_id);
+          }
+          if (otherComments) {
+            otherComments.forEach((c: any) => {
+              if (c.author_id !== user.id) usersToNotify.add(c.author_id);
+            });
+          }
+
+          const truncated = content.slice(0, 80) + (content.length > 80 ? '...' : '');
+          const notifications = [...usersToNotify].map(targetId => ({
+            user_id: targetId,
+            from_user_id: user.id,
+            type: 'comment' as const,
+            post_id: post.supabasePostId!,
+            comment_id: (data as any).id,
+            message: targetId === postData?.author_id
+              ? `${profile.full_name} commented on your post: "${truncated}"`
+              : `${profile.full_name} also commented on a post you commented on: "${truncated}"`,
+          }));
+
+          if (notifications.length > 0) {
+            await supabase.from('notifications').insert(notifications).then(() => {}, () => {});
           }
         }
       }
 
       toast.success('Comment posted!');
     } catch {
-      toast.error('Failed to post comment. Make sure Supabase is configured.');
+      toast.error('Failed to post comment.');
     }
   };
 
@@ -742,9 +919,14 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                   filteredPosts.map((post) => (
                     <motion.div
                       key={post.id}
+                      id={`post-${post.id}`}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden"
+                      className={`bg-white rounded-lg border shadow-sm hover:shadow-md transition-all overflow-hidden ${
+                        post.supabasePostId === highlightSupabasePostId
+                          ? 'border-indigo-400 ring-2 ring-indigo-200'
+                          : 'border-gray-200'
+                      }`}
                     >
                       {/* Repost Banner */}
                       {post.isRepostedByYou && (
@@ -856,7 +1038,12 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                         >
                           <MessageCircle className="w-4 h-4" />
                           <span className="text-xs font-medium">
-                            {(commentsByPost[getPostKey(post.id)] || []).length || 'Comment'}
+                            {(() => {
+                              const loaded = (commentsByPost[getCommentKey(post.id)] || []).length;
+                              const preCount = post.supabasePostId ? (commentCounts[post.supabasePostId] || 0) : 0;
+                              const count = Math.max(loaded, preCount);
+                              return count > 0 ? count : 'Comment';
+                            })()}
                           </span>
                         </button>
 
@@ -894,11 +1081,13 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                                 </div>
                               ) : (
                                 <>
-                                  {(commentsByPost[getPostKey(post.id)] || []).length === 0 ? (
-                                    <p className="text-xs text-gray-400 text-center py-2">No comments yet. Be the first!</p>
+                                  {(commentsByPost[getCommentKey(post.id)] || []).length === 0 ? (
+                                    <p className="text-xs text-gray-400 text-center py-2">
+                                      {post.supabasePostId ? 'No comments yet. Be the first!' : 'Comments available on user-created posts'}
+                                    </p>
                                   ) : (
                                     <div className="space-y-3 max-h-48 overflow-y-auto">
-                                      {(commentsByPost[getPostKey(post.id)] || []).map((comment) => (
+                                      {(commentsByPost[getCommentKey(post.id)] || []).map((comment) => (
                                         <div key={comment.id} className="flex items-start gap-2">
                                           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
                                             {comment.profiles?.avatar_initials || '?'}

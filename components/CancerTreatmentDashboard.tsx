@@ -1,5 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays, Bell } from "lucide-react";
+import { supabase } from '../lib/supabase';
+import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Calendar } from "./ui/calendar";
 import { format } from "date-fns";
@@ -309,40 +311,81 @@ const getMonthIndex = (dateStr: string): number => {
   return monthMap[month];
 };
 
-// Function to convert date string to position percentage based on visible months
-const getDatePosition = (dateStr: string, visibleMonths: string[], startMonthIndex: number) => {
+// Convert event date string like "Feb 1" to a comparable day-of-year number
+const dateToDayOfYear = (dateStr: string): number => {
   const monthMap: Record<string, number> = {
     "Jan": 0, "Feb": 1, "Mar": 2, "Apr": 3, "May": 4, "Jun": 5,
     "Jul": 6, "Aug": 7, "Sep": 8, "Oct": 9, "Nov": 10, "Dec": 11
   };
-  
+  const daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const [month, day] = dateStr.split(' ');
   const monthIndex = monthMap[month];
   const dayNum = parseInt(day);
-  
-  // Calculate relative position within the visible range
+  let doy = dayNum;
+  for (let i = 0; i < monthIndex; i++) doy += daysInMonth[i];
+  return doy;
+};
+
+// Function to convert date string to position percentage based on visible months
+const getDatePosition = (
+  dateStr: string,
+  visibleMonths: string[],
+  startMonthIndex: number,
+  customFrom?: Date,
+  customTo?: Date,
+) => {
+  const monthMap: Record<string, number> = {
+    "Jan": 0, "Feb": 1, "Mar": 2, "Apr": 3, "May": 4, "Jun": 5,
+    "Jul": 6, "Aug": 7, "Sep": 8, "Oct": 9, "Nov": 10, "Dec": 11
+  };
+
+  const [month, day] = dateStr.split(' ');
+  const monthIndex = monthMap[month];
+  const dayNum = parseInt(day);
+
+  // For custom date ranges, use exact day positioning
+  if (customFrom && customTo) {
+    const eventDoy = dateToDayOfYear(dateStr);
+    const fromDoy = dateToDayOfYear(`${allMonths[customFrom.getMonth()]} ${customFrom.getDate()}`);
+    const toDoy = dateToDayOfYear(`${allMonths[customTo.getMonth()]} ${customTo.getDate()}`);
+    const totalRange = toDoy - fromDoy;
+    if (totalRange <= 0) return 50;
+    const offset = eventDoy - fromDoy;
+    if (offset < 0 || offset > totalRange) return -100;
+    return Math.min((offset / totalRange) * 100, 100);
+  }
+
+  // Standard month-based positioning
   const relativeMonth = monthIndex - startMonthIndex;
   if (relativeMonth < 0 || relativeMonth >= visibleMonths.length) {
-    return -100; // Hide if outside range
+    return -100;
   }
-  
-  const position = (relativeMonth + (dayNum / 31)) / (visibleMonths.length - 1);
-  // Clamp to ensure nodes don't exceed 100%
+
+  const denominator = visibleMonths.length > 1 ? visibleMonths.length - 1 : 1;
+  const position = (relativeMonth + (dayNum / 31)) / denominator;
   return Math.min(position * 100, 100);
 };
 
 // Filter events based on time range
-const filterEventsByRange = (events: TimelineEvent[], startMonth: number, endMonth: number) => {
+const filterEventsByRange = (events: TimelineEvent[], startMonth: number, endMonth: number, customFrom?: Date, customTo?: Date) => {
   return events.filter(event => {
+    if (customFrom && customTo) {
+      const eventDoy = dateToDayOfYear(event.date);
+      const fromDoy = dateToDayOfYear(`${allMonths[customFrom.getMonth()]} ${customFrom.getDate()}`);
+      const toDoy = dateToDayOfYear(`${allMonths[customTo.getMonth()]} ${customTo.getDate()}`);
+      return eventDoy >= fromDoy && eventDoy <= toDoy;
+    }
     const eventMonth = getMonthIndex(event.date);
     return eventMonth >= startMonth && eventMonth <= endMonth;
   });
 };
 
 export default function CancerTreatmentDashboard() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [pendingPostId, setPendingPostId] = useState<string | null>(null);
   const [activeTimeRange, setActiveTimeRange] = useState<"1m" | "3m" | "6m" | "1y" | "custom">("1y");
   const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
@@ -367,6 +410,55 @@ export default function CancerTreatmentDashboard() {
       content: "Hello! I'm your AI assistant for cancer treatment insights. I can help you understand timeline events, answer questions about treatments, and provide guidance. How can I assist you today?"
     }
   ]);
+
+  // Fetch unread notification count on mount
+  useEffect(() => {
+    if (!user) return;
+    const fetchUnread = async () => {
+      const { count } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('read', false);
+      setUnreadNotifications(count || 0);
+    };
+    fetchUnread();
+
+    // Real-time: listen for new notifications and show toast
+    const channel = supabase
+      .channel('global-notifications')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${user.id}`,
+      }, (payload: any) => {
+        setUnreadNotifications(prev => prev + 1);
+        const message = payload.new?.message || 'You have a new notification';
+        const postId = payload.new?.post_id;
+        toast(message, {
+          icon: '💬',
+          duration: 6000,
+          action: postId ? {
+            label: 'View Post',
+            onClick: () => handleNotificationNav(postId),
+          } : undefined,
+        });
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
+  // Reset unread count when notifications panel opens
+  useEffect(() => {
+    if (isNotificationsOpen) setUnreadNotifications(0);
+  }, [isNotificationsOpen]);
+
+  const handleNotificationNav = useCallback((postId: string) => {
+    setShowKeywordsTree(true);
+    setPendingPostId(postId);
+  }, []);
 
   const handleRefreshKeywords = () => {
     setIsRefreshing(true);
@@ -433,15 +525,18 @@ export default function CancerTreatmentDashboard() {
     return { visibleMonths: months, startMonth: start, endMonth: end };
   }, [activeTimeRange, customDateRange]);
 
+  const customFrom = activeTimeRange === "custom" ? customDateRange.from : undefined;
+  const customTo = activeTimeRange === "custom" ? customDateRange.to : undefined;
+
   // Filter timeline data based on active time range and search/keyword filters
   const filteredData = useMemo(() => {
     const timeFiltered = {
-      diagnosis: filterEventsByRange(timelineData.diagnosis, startMonth, endMonth),
-      treatment: filterEventsByRange(timelineData.treatment, startMonth, endMonth),
-      monitoring: filterEventsByRange(timelineData.monitoring, startMonth, endMonth),
-      sideEffects: filterEventsByRange(timelineData.sideEffects, startMonth, endMonth),
-      labs: filterEventsByRange(timelineData.labs, startMonth, endMonth),
-      documentation: filterEventsByRange(timelineData.documentation, startMonth, endMonth)
+      diagnosis: filterEventsByRange(timelineData.diagnosis, startMonth, endMonth, customFrom, customTo),
+      treatment: filterEventsByRange(timelineData.treatment, startMonth, endMonth, customFrom, customTo),
+      monitoring: filterEventsByRange(timelineData.monitoring, startMonth, endMonth, customFrom, customTo),
+      sideEffects: filterEventsByRange(timelineData.sideEffects, startMonth, endMonth, customFrom, customTo),
+      labs: filterEventsByRange(timelineData.labs, startMonth, endMonth, customFrom, customTo),
+      documentation: filterEventsByRange(timelineData.documentation, startMonth, endMonth, customFrom, customTo)
     };
 
     // Determine which filter to apply
@@ -471,7 +566,7 @@ export default function CancerTreatmentDashboard() {
       labs: timeFiltered.labs.filter(searchFilter),
       documentation: timeFiltered.documentation.filter(searchFilter)
     };
-  }, [activeTimeRange, startMonth, endMonth, searchQuery, selectedKeyword]);
+  }, [activeTimeRange, startMonth, endMonth, searchQuery, selectedKeyword, customFrom, customTo]);
 
   return (
     <div className="flex h-screen bg-slate-50">
@@ -524,7 +619,9 @@ export default function CancerTreatmentDashboard() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {showKeywordsTree ? (
           <WaveVisualization 
-            onClose={() => setShowKeywordsTree(false)} 
+            onClose={() => setShowKeywordsTree(false)}
+            pendingPostId={pendingPostId}
+            onPendingPostHandled={() => setPendingPostId(null)}
           />
         ) : activeView === "timeline" ? (
           <>
@@ -561,6 +658,11 @@ export default function CancerTreatmentDashboard() {
                       title="Notifications"
                     >
                       <Bell className="w-5 h-5 text-gray-600" />
+                      {unreadNotifications > 0 && (
+                        <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                          {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                        </span>
+                      )}
                     </button>
                     <button
                       onClick={() => setIsProfileOpen(true)}
@@ -661,6 +763,13 @@ export default function CancerTreatmentDashboard() {
                   
                   <div className="flex items-center gap-3">
                     <button 
+                      onClick={() => setShowKeywordsTree(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full transition-colors"
+                    >
+                      <Activity className="w-4 h-4" />
+                      View Keywords
+                    </button>
+                    <button 
                       onClick={() => setIsNewsFeedOpen(true)}
                       className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-full transition-colors"
                     >
@@ -679,22 +788,120 @@ export default function CancerTreatmentDashboard() {
                     </button>
                   </div>
                 </div>
+
+                {/* Smart Keywords */}
+                <div className="flex items-center gap-3 mt-4 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {keywords.map((keyword) => (
+                      <Popover key={keyword.id}>
+                        <PopoverTrigger asChild>
+                          <button
+                            onClick={() => setSelectedKeyword(keyword.label)}
+                            className={`px-3 py-1 rounded-full text-xs border transition-all ${
+                              selectedKeyword === keyword.label 
+                                ? 'ring-2 ring-indigo-500 ring-offset-1' 
+                                : ''
+                            } ${getKeywordColor(keyword.color)}`}
+                          >
+                            {keyword.label}
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80" side="bottom" align="start">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-gray-900">{keyword.label}</h4>
+                              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                                {keyword.category}
+                              </span>
+                            </div>
+                            <p className="text-gray-600 text-sm leading-relaxed">{keyword.description}</p>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    ))}
+                    {selectedKeyword && (
+                      <button 
+                        onClick={() => setSelectedKeyword(null)}
+                        className="flex items-center gap-1 px-3 py-1 rounded-full text-xs text-white bg-indigo-600 hover:bg-indigo-700 border border-indigo-600 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                        Clear filter
+                      </button>
+                    )}
+                  </div>
+                  <div className="ml-auto flex items-center gap-2">
+                    <span className="text-xs text-gray-400">
+                      Updated {lastUpdated}
+                    </span>
+                    <button
+                      onClick={handleRefreshKeywords}
+                      className={`p-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 transition-all ${
+                        isRefreshing ? 'animate-spin' : ''
+                      }`}
+                      title="Refresh keywords"
+                      disabled={isRefreshing}
+                    >
+                      <RefreshCw className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* Timeline Content */}
             <div className="flex-1 overflow-auto bg-white">
               <div className="px-8 py-6">
-                {/* Month Headers */}
+                {/* Date Headers */}
                 <div className="flex items-center mb-8">
                   <div className="w-40" /> {/* Spacer for row labels */}
-                  <div className="flex-1 flex justify-between px-8">
-                    {visibleMonths.map((month, idx) => (
-                      <div key={idx} className="text-gray-500 text-sm">
-                        {month}
-                      </div>
-                    ))}
-                  </div>
+                  {activeTimeRange === "custom" && customDateRange.from && customDateRange.to ? (
+                    <div className="flex-1 relative h-10 px-8">
+                      {(() => {
+                        const from = customDateRange.from!;
+                        const to = customDateRange.to!;
+                        const diffDays = Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
+                        const labels: { date: Date; position: number }[] = [];
+
+                        const totalMs = to.getTime() - from.getTime();
+                        if (diffDays <= 14) {
+                          for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+                            const pos = ((d.getTime() - from.getTime()) / totalMs) * 100;
+                            labels.push({ date: new Date(d), position: pos });
+                          }
+                        } else {
+                          const targetLabels = diffDays <= 60 ? 10 : 12;
+                          const step = Math.max(1, Math.floor(diffDays / targetLabels));
+                          for (let d = new Date(from); d <= to; d.setDate(d.getDate() + step)) {
+                            const pos = ((d.getTime() - from.getTime()) / totalMs) * 100;
+                            labels.push({ date: new Date(d), position: pos });
+                          }
+                          const lastLabel = labels[labels.length - 1];
+                          if (lastLabel && lastLabel.position < 95) {
+                            labels.push({ date: new Date(to), position: 100 });
+                          }
+                        }
+
+                        return labels.map((l, idx) => (
+                          <div
+                            key={idx}
+                            className="absolute text-gray-500 text-xs text-center flex flex-col items-center -translate-x-1/2"
+                            style={{ left: `${l.position}%` }}
+                          >
+                            <span className="font-medium">{format(l.date, "d")}</span>
+                            <span className="text-gray-400 text-[10px]">{format(l.date, "MMM")}</span>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex justify-between px-8">
+                      {visibleMonths.map((month, idx) => (
+                        <div key={idx} className="text-gray-500 text-sm">
+                          {month}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Timeline Rows */}
@@ -712,7 +919,7 @@ export default function CancerTreatmentDashboard() {
                         
                         {/* Events */}
                         {filteredData.diagnosis.map((event) => {
-                          const position = getDatePosition(event.date, visibleMonths, startMonth);
+                          const position = getDatePosition(event.date, visibleMonths, startMonth, customFrom, customTo);
                           if (position < 0) return null;
                           
                           return (
@@ -771,7 +978,7 @@ export default function CancerTreatmentDashboard() {
                         
                         {/* Events */}
                         {filteredData.treatment.map((event) => {
-                          const position = getDatePosition(event.date, visibleMonths, startMonth);
+                          const position = getDatePosition(event.date, visibleMonths, startMonth, customFrom, customTo);
                           if (position < 0) return null;
                           
                           return (
@@ -820,7 +1027,7 @@ export default function CancerTreatmentDashboard() {
                         
                         {/* Events */}
                         {filteredData.monitoring.map((event) => {
-                          const position = getDatePosition(event.date, visibleMonths, startMonth);
+                          const position = getDatePosition(event.date, visibleMonths, startMonth, customFrom, customTo);
                           if (position < 0) return null;
                           
                           return (
@@ -869,7 +1076,7 @@ export default function CancerTreatmentDashboard() {
                         
                         {/* Events */}
                         {filteredData.sideEffects.map((event) => {
-                          const position = getDatePosition(event.date, visibleMonths, startMonth);
+                          const position = getDatePosition(event.date, visibleMonths, startMonth, customFrom, customTo);
                           if (position < 0) return null;
                           
                           return (
@@ -928,7 +1135,7 @@ export default function CancerTreatmentDashboard() {
                         
                         {/* Events */}
                         {filteredData.labs.map((event) => {
-                          const position = getDatePosition(event.date, visibleMonths, startMonth);
+                          const position = getDatePosition(event.date, visibleMonths, startMonth, customFrom, customTo);
                           if (position < 0) return null;
                           
                           return (
@@ -973,75 +1180,57 @@ export default function CancerTreatmentDashboard() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Documents Row */}
+                  <div className="border-b border-gray-200 py-6">
+                    <div className="flex items-center">
+                      <div className="w-40 pr-6">
+                        <h3 className="text-gray-900 mb-1">Documents</h3>
+                        <p className="text-gray-500 text-sm">Records & consents</p>
+                      </div>
+                      <div className="flex-1 relative h-16">
+                        {/* Timeline line */}
+                        <div className="absolute top-1/2 left-0 right-0 h-1 bg-rose-200 rounded-full" />
+                        
+                        {/* Events */}
+                        {filteredData.documentation.map((event) => {
+                          const position = getDatePosition(event.date, visibleMonths, startMonth, customFrom, customTo);
+                          if (position < 0) return null;
+                          
+                          return (
+                            <Popover key={event.id}>
+                              <PopoverTrigger asChild>
+                                <button
+                                  className="absolute top-1/2 -translate-y-1/2 group"
+                                  style={{ left: `${position}%` }}
+                                >
+                                  <div className="w-4 h-4 bg-rose-600 rounded-full shadow-lg group-hover:scale-150 transition-transform" />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-96" side="top" align="center">
+                                <div className="space-y-3">
+                                  <div>
+                                    <h4 className="text-gray-900 mb-1">{event.title}</h4>
+                                    <p className="text-gray-500 text-sm">{event.date} • {event.description}</p>
+                                  </div>
+                                  <div className="bg-gray-50 rounded-lg p-4">
+                                    <p className="text-gray-600 text-sm leading-relaxed">{event.details}</p>
+                                  </div>
+                                  <div className="pt-2 border-t border-gray-200">
+                                    <button className="text-indigo-600 hover:text-indigo-700 text-sm transition-colors inline-flex items-center gap-1">
+                                      View document →
+                                    </button>
+                                  </div>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Keywords Section */}
-                <div className="mt-8 pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-gray-900">Smart Keywords</h3>
-                      <button 
-                        onClick={() => setShowKeywordsTree(true)}
-                        className="text-indigo-600 hover:text-indigo-700 text-sm transition-colors"
-                      >
-                        View all keywords
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm text-gray-500">
-                        Last updated - {lastUpdated}
-                      </span>
-                      <button
-                        onClick={handleRefreshKeywords}
-                        className={`p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-indigo-600 transition-all ${
-                          isRefreshing ? 'animate-spin' : ''
-                        }`}
-                        title="Refresh keywords"
-                        disabled={isRefreshing}
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {keywords.map((keyword) => (
-                      <Popover key={keyword.id}>
-                        <PopoverTrigger asChild>
-                          <button
-                            onClick={() => setSelectedKeyword(keyword.label)}
-                            className={`px-3 py-1.5 rounded-full text-sm border transition-all ${
-                              selectedKeyword === keyword.label 
-                                ? 'ring-2 ring-indigo-500 ring-offset-2' 
-                                : ''
-                            } ${getKeywordColor(keyword.color)}`}
-                          >
-                            {keyword.label}
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-80" side="top" align="start">
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <h4 className="text-gray-900">{keyword.label}</h4>
-                              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                                {keyword.category}
-                              </span>
-                            </div>
-                            <p className="text-gray-600 text-sm leading-relaxed">{keyword.description}</p>
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    ))}
-                    {selectedKeyword && (
-                      <button 
-                        onClick={() => setSelectedKeyword(null)}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm text-white bg-indigo-600 hover:bg-indigo-700 border border-indigo-600 transition-colors"
-                      >
-                        <X className="w-4 h-4" />
-                        Clear filter
-                      </button>
-                    )}
-                  </div>
-                </div>
               </div>
             </div>
           </>
@@ -1264,7 +1453,11 @@ export default function CancerTreatmentDashboard() {
       <ProfilePanel isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
 
       {/* Notifications Panel */}
-      <NotificationsPanel isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} />
+      <NotificationsPanel
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+        onNotificationClick={handleNotificationNav}
+      />
     </div>
   );
 }

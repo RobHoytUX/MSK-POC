@@ -28,6 +28,8 @@ interface Column {
 
 interface WaveVisualizationProps {
   onClose?: () => void;
+  pendingPostId?: string | null;
+  onPendingPostHandled?: () => void;
 }
 
 const medicalData: Column[] = [
@@ -107,7 +109,7 @@ const medicalData: Column[] = [
   },
 ];
 
-export function WaveVisualization({ onClose }: WaveVisualizationProps) {
+export function WaveVisualization({ onClose, pendingPostId, onPendingPostHandled }: WaveVisualizationProps) {
   const { profile } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -127,6 +129,8 @@ export function WaveVisualization({ onClose }: WaveVisualizationProps) {
   const [doctorFeedOpen, setDoctorFeedOpen] = useState(false);
   const [articleReaderOpen, setArticleReaderOpen] = useState(false);
   const [postToFeedModalOpen, setPostToFeedModalOpen] = useState(false);
+  const [feedRefreshTrigger, setFeedRefreshTrigger] = useState(0);
+  const [notificationPostId, setNotificationPostId] = useState<string | null>(null);
   const [currentArticle, setCurrentArticle] = useState<{ title: string; description?: string; author?: string } | null>(null);
   const [savedCanvasState, setSavedCanvasState] = useState<{ focusedNode: string | null; selectedNodes: Set<string> } | null>(null);
   const [doctorConnectionInfo, setDoctorConnectionInfo] = useState<{ name: string; avatar: string; specialty: string; postTitle: string; doctorId: number; postId: number } | null>(null);
@@ -173,6 +177,16 @@ export function WaveVisualization({ onClose }: WaveVisualizationProps) {
   ]);
   const [svgWidth, setSvgWidth] = useState(1200);
   const svgRef = useRef<SVGSVGElement>(null);
+
+  // Handle pending notification post navigation
+  useEffect(() => {
+    if (pendingPostId) {
+      setNotificationPostId(pendingPostId);
+      setDoctorFeedOpen(true);
+      setFeedRefreshTrigger(prev => prev + 1);
+      onPendingPostHandled?.();
+    }
+  }, [pendingPostId]);
 
   // Update SVG width on mount and resize
   useEffect(() => {
@@ -1565,11 +1579,14 @@ export function WaveVisualization({ onClose }: WaveVisualizationProps) {
           setDoctorFeedOpen(false);
           setFeedFocusedDoctorId(null);
           setFeedFocusedPostId(null);
+          setNotificationPostId(null);
         }}
         onArticleClick={handleArticleClick}
         onConnectionClick={handleConnectionClick}
         focusedDoctorId={feedFocusedDoctorId}
         focusedPostId={feedFocusedPostId}
+        refreshTrigger={feedRefreshTrigger}
+        highlightSupabasePostId={notificationPostId}
       />
 
       <ArticleReader
@@ -1582,6 +1599,7 @@ export function WaveVisualization({ onClose }: WaveVisualizationProps) {
         isOpen={postToFeedModalOpen}
         onClose={() => setPostToFeedModalOpen(false)}
         connectionTitle={focusedNode ? medicalData.flatMap(col => col.nodes).find(n => n.id === focusedNode)?.label : undefined}
+        onPostCreated={() => setFeedRefreshTrigger(prev => prev + 1)}
       />
 
       <ClinicalNotesModal
