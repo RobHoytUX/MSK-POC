@@ -71,7 +71,7 @@ export default function AuthPage() {
           <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-500/30">
             <div className="w-10 h-10 bg-white rounded-xl" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">MSK Clinical Hub</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">MAPS</h1>
           <p className="text-indigo-200/70">Cancer Treatment Intelligence Platform</p>
         </div>
 

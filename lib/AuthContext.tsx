@@ -82,14 +82,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const newUser = data?.user;
     const newSession = data?.session;
     if (newUser) {
-      const { error: profileError } = await supabase.rpc('create_profile', {
-        user_id: newUser.id,
-        user_email: email,
-        user_full_name: fullName,
-        user_specialty: specialty,
-        user_institution: institution,
-        user_avatar_initials: getInitials(fullName),
-      });
+      // Small delay to let auth.users row fully commit
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      let profileError: Error | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const { error: err } = await supabase.rpc('create_profile', {
+          user_id: newUser.id,
+          user_email: email,
+          user_full_name: fullName,
+          user_specialty: specialty,
+          user_institution: institution,
+          user_avatar_initials: getInitials(fullName),
+        });
+        if (!err) {
+          profileError = null;
+          break;
+        }
+        profileError = err as Error;
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
       if (profileError) {
         return { error: new Error('Account created but failed to save profile: ' + profileError.message) };
       }
