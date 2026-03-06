@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { ReactNode, useState } from "react";
 import { Search, X, ExternalLink, TrendingUp, Users, FileText, Hash, Sparkles } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
@@ -357,9 +357,10 @@ const getTrendingBadgeColor = (score: number) => {
 
 interface TrendingResearchPageProps {
   onClose: () => void;
+  headerActions?: ReactNode;
 }
 
-export default function TrendingResearchPage({}: TrendingResearchPageProps) {
+export default function TrendingResearchPage({ headerActions }: TrendingResearchPageProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedArticle, setSelectedArticle] = useState<ResearchArticle | null>(null);
   const [isPanelVisible, setIsPanelVisible] = useState(false);
@@ -402,23 +403,26 @@ export default function TrendingResearchPage({}: TrendingResearchPageProps) {
                 <h1 className="text-gray-900 mb-1">Trending Research</h1>
                 <p className="text-gray-500">Latest breakthrough studies relevant to your diagnosis and treatment</p>
               </div>
-              <div className="relative w-96">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by title, authors, journal, or keywords..."
-                  className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors"
-                  >
-                    <X className="w-4 h-4 text-gray-600" />
-                  </button>
-                )}
+              <div className="flex items-center gap-3">
+                <div className="relative w-96">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search by title, authors, journal, or keywords..."
+                    className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors"
+                    >
+                      <X className="w-4 h-4 text-gray-600" />
+                    </button>
+                  )}
+                </div>
+                {headerActions}
               </div>
             </div>
             

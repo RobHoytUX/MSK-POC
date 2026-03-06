@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Bell } from 'lucide-react';
+import { ArrowLeft, Bell, Moon, Sun } from 'lucide-react';
 import { ShareModal } from './ShareModal';
 import { SaveModal } from './SaveModal';
 import { QuantumPanel } from './QuantumPanel';
@@ -30,6 +30,8 @@ interface WaveVisualizationProps {
   onClose?: () => void;
   pendingPostId?: string | null;
   onPendingPostHandled?: () => void;
+  isDark: boolean;
+  onToggleTheme: () => void;
 }
 
 const medicalData: Column[] = [
@@ -109,7 +111,7 @@ const medicalData: Column[] = [
   },
 ];
 
-export function WaveVisualization({ onClose, pendingPostId, onPendingPostHandled }: WaveVisualizationProps) {
+export function WaveVisualization({ onClose, pendingPostId, onPendingPostHandled, isDark, onToggleTheme }: WaveVisualizationProps) {
   const { profile } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -693,6 +695,13 @@ export function WaveVisualization({ onClose, pendingPostId, onPendingPostHandled
                 </>
               )}
               <div className="h-6 w-px bg-gray-200" />
+              <button
+                onClick={onToggleTheme}
+                className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
+                title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {isDark ? <Sun className="w-5 h-5 text-gray-600" /> : <Moon className="w-5 h-5 text-gray-600" />}
+              </button>
               <button
                 onClick={() => setIsNotificationsOpen(true)}
                 className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"

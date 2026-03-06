@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
-import { Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays, Bell } from "lucide-react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays, Bell, Sun, Moon, SlidersHorizontal, Layers3, Stethoscope, Microscope } from "lucide-react";
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -13,6 +13,8 @@ import { WaveVisualization } from './keywords-wave';
 import { useAuth } from '../lib/AuthContext';
 import ProfilePanel from './ProfilePanel';
 import NotificationsPanel from './NotificationsPanel';
+import { Patient } from '../lib/patients';
+import mapsWhiteLogo from '../src/assets/maps-white.png';
 
 interface TimelineEvent {
   id: string;
@@ -380,7 +382,20 @@ const filterEventsByRange = (events: TimelineEvent[], startMonth: number, endMon
   });
 };
 
-export default function CancerTreatmentDashboard() {
+interface DashboardProps {
+  selectedPatient?: Patient;
+  onChangePatient?: () => void;
+  isDark: boolean;
+  onToggleTheme: () => void;
+}
+
+type ActiveView = "timeline" | "trials" | "research" | "ai";
+type FeatureScope = "all" | "clinical" | "research";
+
+const getDefaultViewForScope = (scope: FeatureScope): ActiveView =>
+  scope === "research" ? "trials" : "timeline";
+
+export default function CancerTreatmentDashboard({ selectedPatient, onChangePatient, isDark, onToggleTheme }: DashboardProps) {
   const { profile, user } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -401,8 +416,14 @@ export default function CancerTreatmentDashboard() {
   const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState("30 minutes ago");
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeView, setActiveView] = useState<"timeline" | "trials" | "research" | "ai">("timeline");
+  const [activeView, setActiveView] = useState<ActiveView>("timeline");
+  const [featureScope, setFeatureScope] = useState<FeatureScope>(() => {
+    const saved = localStorage.getItem("maps-feature-scope");
+    return saved === "clinical" || saved === "research" ? saved : "all";
+  });
+  const [isScopePickerOpen, setIsScopePickerOpen] = useState(false);
   const [showKeywordsTree, setShowKeywordsTree] = useState(false);
+  const scopePickerRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState([
     {
       id: "1",
@@ -410,6 +431,73 @@ export default function CancerTreatmentDashboard() {
       content: "Hello! I'm your AI assistant for cancer treatment insights. I can help you understand timeline events, answer questions about treatments, and provide guidance. How can I assist you today?"
     }
   ]);
+
+  const isClinicalEnabled = featureScope !== "research";
+  const isResearchEnabled = featureScope !== "clinical";
+
+  const isViewAllowed = useCallback((view: ActiveView, scope: FeatureScope) => {
+    if (scope === "clinical") return view === "timeline" || view === "ai";
+    if (scope === "research") return view === "trials" || view === "research";
+    return true;
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("maps-feature-scope", featureScope);
+  }, [featureScope]);
+
+  useEffect(() => {
+    if (!isViewAllowed(activeView, featureScope)) {
+      setActiveView(getDefaultViewForScope(featureScope));
+      setShowKeywordsTree(false);
+    }
+  }, [activeView, featureScope, isViewAllowed]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!scopePickerRef.current?.contains(event.target as Node)) {
+        setIsScopePickerOpen(false);
+      }
+    };
+
+    if (isScopePickerOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isScopePickerOpen]);
+
+  const renderFeatureScopeToggle = () => (
+    <div className="flex flex-col gap-1">
+      {(
+        [
+          { id: "all", label: "All", Icon: Layers3 },
+          { id: "clinical", label: "Clinical", Icon: Stethoscope },
+          { id: "research", label: "Research", Icon: Microscope },
+        ] as const
+      ).map(({ id, label, Icon }) => (
+        <button
+          key={id}
+          onClick={() => {
+            setFeatureScope(id);
+            setIsScopePickerOpen(false);
+          }}
+          className={`w-full text-left px-3 py-2 text-[15px] rounded-md transition-colors ${
+            featureScope === id
+              ? "bg-indigo-600 text-white shadow-sm"
+              : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+          }`}
+          title={`Focus on ${id} features`}
+        >
+          <span className="inline-flex items-center gap-2">
+            <Icon className="w-4 h-4" />
+            {label}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
 
   // Fetch unread notification count on mount
   useEffect(() => {
@@ -472,6 +560,32 @@ export default function CancerTreatmentDashboard() {
       }, 3000);
     }, 1000);
   };
+
+  const renderHeaderActions = () => (
+    <>
+      <button
+        onClick={onToggleTheme}
+        className="p-2 bg-white hover:bg-gray-100 rounded-full transition-colors shadow-sm border border-gray-200"
+        title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      >
+        {isDark ? <Sun className="w-5 h-5 text-gray-600" /> : <Moon className="w-5 h-5 text-gray-600" />}
+      </button>
+      <button
+        onClick={() => setIsNotificationsOpen(true)}
+        className="p-2 bg-white hover:bg-gray-100 rounded-full transition-colors shadow-sm border border-gray-200"
+        title="Notifications"
+      >
+        <Bell className="w-5 h-5 text-gray-600" />
+      </button>
+      <button
+        onClick={() => setIsProfileOpen(true)}
+        className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-sm font-bold hover:scale-105 transition-transform shadow-md"
+        title="My Profile"
+      >
+        {profile?.avatar_initials || 'U'}
+      </button>
+    </>
+  );
 
   // Calculate visible months and date range based on selected time range
   const { visibleMonths, startMonth, endMonth } = useMemo(() => {
@@ -571,47 +685,69 @@ export default function CancerTreatmentDashboard() {
   return (
     <div className="flex h-screen bg-slate-50">
       {/* Sidebar */}
-      <div className="w-20 bg-indigo-600 flex flex-col items-center py-8 gap-6 shadow-2xl">
-        <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-lg">
-          <div className="w-8 h-8 bg-indigo-500 rounded-lg" />
-        </div>
+      <div className="relative w-20 bg-indigo-600 flex flex-col items-center py-8 gap-6 shadow-2xl">
+        <img src={mapsWhiteLogo} alt="MAPS icon" className="h-[30px] w-[30px] object-contain" />
         
         <div className="flex-1 flex flex-col gap-4 pt-8">
-          <button 
-            onClick={() => {
-              setActiveView("timeline");
-              setShowKeywordsTree(false);
-            }}
-            className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-lg ${
-              (activeView === "timeline" || showKeywordsTree) ? "bg-white" : "bg-white/10 hover:bg-white/20 hover:scale-110"
-            }`}
+          {isClinicalEnabled && (
+            <button 
+              onClick={() => {
+                setActiveView("timeline");
+                setShowKeywordsTree(false);
+              }}
+              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-lg ${
+                (activeView === "timeline" || showKeywordsTree) ? "bg-white" : "bg-white/10 hover:bg-white/20 hover:scale-110"
+              }`}
+            >
+              <CalendarIcon className={`w-6 h-6 ${(activeView === "timeline" || showKeywordsTree) ? "text-indigo-600" : "text-white"}`} />
+            </button>
+          )}
+          {isResearchEnabled && (
+            <button 
+              onClick={() => setActiveView("trials")}
+              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+                activeView === "trials" ? "bg-white shadow-lg" : "bg-white/10 hover:bg-white/20 hover:scale-110"
+              } group`}
+            >
+              <FileText className={`w-6 h-6 ${activeView === "trials" ? "text-indigo-600" : "text-white"}`} />
+            </button>
+          )}
+          {isResearchEnabled && (
+            <button 
+              onClick={() => setActiveView("research")}
+              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+                activeView === "research" ? "bg-white shadow-lg" : "bg-white/10 hover:bg-white/20 hover:scale-110"
+              } group`}
+            >
+              <Activity className={`w-6 h-6 ${activeView === "research" ? "text-indigo-600" : "text-white"}`} />
+            </button>
+          )}
+          {isClinicalEnabled && (
+            <button 
+              onClick={() => setActiveView("ai")}
+              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+                activeView === "ai" ? "bg-white shadow-lg" : "bg-white/10 hover:bg-white/20 hover:scale-110"
+              } group`}
+            >
+              <Sparkles className={`w-6 h-6 ${activeView === "ai" ? "text-indigo-600" : "text-white"}`} />
+            </button>
+          )}
+        </div>
+
+        <div ref={scopePickerRef} className="relative">
+          <button
+            onClick={() => setIsScopePickerOpen((prev) => !prev)}
+            className="w-12 h-12 rounded-xl flex items-center justify-center transition-all bg-white/10 hover:bg-white/20 hover:scale-110"
+            title="Feature scope"
           >
-            <CalendarIcon className={`w-6 h-6 ${(activeView === "timeline" || showKeywordsTree) ? "text-indigo-600" : "text-white"}`} />
+            <SlidersHorizontal className="w-6 h-6 text-white" />
           </button>
-          <button 
-            onClick={() => setActiveView("trials")}
-            className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-              activeView === "trials" ? "bg-white shadow-lg" : "bg-white/10 hover:bg-white/20 hover:scale-110"
-            } group`}
-          >
-            <FileText className={`w-6 h-6 ${activeView === "trials" ? "text-indigo-600" : "text-white"}`} />
-          </button>
-          <button 
-            onClick={() => setActiveView("research")}
-            className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-              activeView === "research" ? "bg-white shadow-lg" : "bg-white/10 hover:bg-white/20 hover:scale-110"
-            } group`}
-          >
-            <Activity className={`w-6 h-6 ${activeView === "research" ? "text-indigo-600" : "text-white"}`} />
-          </button>
-          <button 
-            onClick={() => setActiveView("ai")}
-            className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-              activeView === "ai" ? "bg-white shadow-lg" : "bg-white/10 hover:bg-white/20 hover:scale-110"
-            } group`}
-          >
-            <Sparkles className={`w-6 h-6 ${activeView === "ai" ? "text-indigo-600" : "text-white"}`} />
-          </button>
+          {isScopePickerOpen && (
+            <div className="absolute left-full ml-3 bottom-0 bg-white rounded-xl border border-gray-200 shadow-xl p-2 min-w-[180px] z-30">
+              <p className="text-[11px] text-gray-500 px-2 pb-1">Feature Scope</p>
+              {renderFeatureScopeToggle()}
+            </div>
+          )}
         </div>
       </div>
 
@@ -622,6 +758,8 @@ export default function CancerTreatmentDashboard() {
             onClose={() => setShowKeywordsTree(false)}
             pendingPostId={pendingPostId}
             onPendingPostHandled={() => setPendingPostId(null)}
+            isDark={isDark}
+            onToggleTheme={onToggleTheme}
           />
         ) : activeView === "timeline" ? (
           <>
@@ -630,8 +768,24 @@ export default function CancerTreatmentDashboard() {
               <div className="px-8 py-6">
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h1 className="text-gray-900 mb-1">Patient Timeline</h1>
-                    <p className="text-gray-500">Track treatment progress and key milestones</p>
+                    <div className="flex items-center gap-3">
+                      <h1 className="text-gray-900 mb-1">
+                        {selectedPatient ? selectedPatient.name : 'Patient Timeline'}
+                      </h1>
+                      {onChangePatient && (
+                        <button
+                          onClick={onChangePatient}
+                          className="text-xs text-indigo-600 hover:text-indigo-700 font-medium px-2 py-1 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors"
+                        >
+                          Change Patient
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-gray-500">
+                      {selectedPatient
+                        ? `${selectedPatient.age}yo ${selectedPatient.gender} · ${selectedPatient.diagnoses[0]} · ${selectedPatient.mrn}`
+                        : 'Track treatment progress and key milestones'}
+                    </p>
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="relative w-96">
@@ -652,6 +806,13 @@ export default function CancerTreatmentDashboard() {
                         </button>
                       )}
                     </div>
+                    <button
+                      onClick={onToggleTheme}
+                      className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+                    >
+                      {isDark ? <Sun className="w-5 h-5 text-gray-600" /> : <Moon className="w-5 h-5 text-gray-600" />}
+                    </button>
                     <button
                       onClick={() => setIsNotificationsOpen(true)}
                       className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
@@ -762,30 +923,36 @@ export default function CancerTreatmentDashboard() {
                   </div>
                   
                   <div className="flex items-center gap-3">
-                    <button 
-                      onClick={() => setShowKeywordsTree(true)}
-                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full transition-colors"
-                    >
-                      <Activity className="w-4 h-4" />
-                      View Keywords
-                    </button>
-                    <button 
-                      onClick={() => setIsNewsFeedOpen(true)}
-                      className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-full transition-colors"
-                    >
-                      <Newspaper className="w-4 h-4" />
-                      News Feed
-                    </button>
-                    <button 
-                      onClick={() => {
-                        setIsAIPanelOpen(true);
-                        setTimeout(() => setIsAIPanelVisible(true), 10);
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      Ask AI
-                    </button>
+                    {isClinicalEnabled && (
+                      <button 
+                        onClick={() => setShowKeywordsTree(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-full transition-colors"
+                      >
+                        <Activity className="w-4 h-4" />
+                        View Keywords
+                      </button>
+                    )}
+                    {isResearchEnabled && (
+                      <button 
+                        onClick={() => setIsNewsFeedOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-full transition-colors"
+                      >
+                        <Newspaper className="w-4 h-4" />
+                        News Feed
+                      </button>
+                    )}
+                    {isClinicalEnabled && (
+                      <button 
+                        onClick={() => {
+                          setIsAIPanelOpen(true);
+                          setTimeout(() => setIsAIPanelVisible(true), 10);
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        Ask AI
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -1236,48 +1403,29 @@ export default function CancerTreatmentDashboard() {
           </>
         ) : activeView === "trials" ? (
           <div className="relative h-full">
-            <ClinicalTrialsPage onClose={() => setActiveView("timeline")} />
-            <div className="absolute top-5 right-8 flex items-center gap-3 z-10">
-              <button
-                onClick={() => setIsNotificationsOpen(true)}
-                className="p-2 bg-white hover:bg-gray-100 rounded-full transition-colors shadow-sm border border-gray-200"
-                title="Notifications"
-              >
-                <Bell className="w-5 h-5 text-gray-600" />
-              </button>
-              <button
-                onClick={() => setIsProfileOpen(true)}
-                className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-sm font-bold hover:scale-105 transition-transform shadow-md"
-                title="My Profile"
-              >
-                {profile?.avatar_initials || 'U'}
-              </button>
-            </div>
+            <ClinicalTrialsPage
+              onClose={() => setActiveView(getDefaultViewForScope(featureScope))}
+              headerActions={<div className="flex items-center gap-3">{renderHeaderActions()}</div>}
+            />
           </div>
         ) : activeView === "research" ? (
           <div className="relative h-full">
-            <TrendingResearchPage onClose={() => setActiveView("timeline")} />
-            <div className="absolute top-5 right-8 flex items-center gap-3 z-10">
-              <button
-                onClick={() => setIsNotificationsOpen(true)}
-                className="p-2 bg-white hover:bg-gray-100 rounded-full transition-colors shadow-sm border border-gray-200"
-                title="Notifications"
-              >
-                <Bell className="w-5 h-5 text-gray-600" />
-              </button>
-              <button
-                onClick={() => setIsProfileOpen(true)}
-                className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-sm font-bold hover:scale-105 transition-transform shadow-md"
-                title="My Profile"
-              >
-                {profile?.avatar_initials || 'U'}
-              </button>
-            </div>
+            <TrendingResearchPage
+              onClose={() => setActiveView(getDefaultViewForScope(featureScope))}
+              headerActions={<div className="flex items-center gap-3">{renderHeaderActions()}</div>}
+            />
           </div>
         ) : (
           <div className="relative h-full">
-            <AIPage onClose={() => setActiveView("timeline")} />
+            <AIPage onClose={() => setActiveView(getDefaultViewForScope(featureScope))} />
             <div className="absolute top-5 right-8 flex items-center gap-3 z-10">
+              <button
+                onClick={onToggleTheme}
+                className="p-2 bg-white hover:bg-gray-100 rounded-full transition-colors shadow-sm border border-gray-200"
+                title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {isDark ? <Sun className="w-5 h-5 text-gray-600" /> : <Moon className="w-5 h-5 text-gray-600" />}
+              </button>
               <button
                 onClick={() => setIsNotificationsOpen(true)}
                 className="p-2 bg-white hover:bg-gray-100 rounded-full transition-colors shadow-sm border border-gray-200"

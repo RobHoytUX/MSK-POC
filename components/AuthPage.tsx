@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../lib/AuthContext';
 import { supabaseConfigured } from '../lib/supabase';
 import { Mail, Lock, User, Building2, Stethoscope, ArrowRight, AlertCircle, CheckCircle, Settings } from 'lucide-react';
+import mapsWhiteLogo from '../src/assets/maps-white.png';
 
 export default function AuthPage() {
   const { signIn, signUp } = useAuth();
@@ -68,11 +69,9 @@ export default function AuthPage() {
         className="relative w-full max-w-md"
       >
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-500/30">
-            <div className="w-10 h-10 bg-white rounded-xl" />
-          </div>
+          <img src={mapsWhiteLogo} alt="MAPS logo" className="w-16 h-16 object-contain mx-auto mb-4" />
           <h1 className="text-3xl font-bold text-white mb-2">MAPS</h1>
-          <p className="text-indigo-200/70">Cancer Treatment Intelligence Platform</p>
+          <p className="text-indigo-200/70">Clinical Intelligence Platform</p>
         </div>
 
         {!supabaseConfigured && (
@@ -166,7 +165,7 @@ VITE_SUPABASE_ANON_KEY=eyJ...`}
                         placeholder="Full Name (e.g., Dr. Jane Smith)"
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
-                        className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-indigo-200/30 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                        className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                         required
                       />
                     </div>
@@ -177,7 +176,7 @@ VITE_SUPABASE_ANON_KEY=eyJ...`}
                         placeholder="Specialty (e.g., Oncologist)"
                         value={specialty}
                         onChange={(e) => setSpecialty(e.target.value)}
-                        className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-indigo-200/30 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                        className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                       />
                     </div>
                     <div className="relative">
@@ -187,7 +186,7 @@ VITE_SUPABASE_ANON_KEY=eyJ...`}
                         placeholder="Institution (e.g., Memorial Cancer Center)"
                         value={institution}
                         onChange={(e) => setInstitution(e.target.value)}
-                        className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-indigo-200/30 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                        className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                       />
                     </div>
                   </>
@@ -200,7 +199,7 @@ VITE_SUPABASE_ANON_KEY=eyJ...`}
                     placeholder="Email address"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-indigo-200/30 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                    className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                     required
                   />
                 </div>
@@ -212,7 +211,7 @@ VITE_SUPABASE_ANON_KEY=eyJ...`}
                     placeholder="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-indigo-200/30 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                    className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                     required
                     minLength={6}
                   />
