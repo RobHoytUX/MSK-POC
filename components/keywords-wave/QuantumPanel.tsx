@@ -58,7 +58,25 @@ export function QuantumPanel({ isOpen, onClose }: QuantumPanelProps) {
         </div>
 
         {/* Content */}
-        <div className="h-[calc(100%-100px)] overflow-y-auto p-6 space-y-6">
+        <div className="quantum-scroll h-[calc(100%-100px)] overflow-y-auto p-6 space-y-6">
+          {/* Confidence Score */}
+          <div>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.1 }}
+              className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-400/40 rounded-lg p-4"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-semibold text-white">Analysis Confidence</span>
+                <span className="text-[26px] font-bold text-white">94%</span>
+              </div>
+              <p className="text-xs text-purple-200">
+                Based on 1,247 data points and 50,000+ similar patient outcomes in quantum database
+              </p>
+            </motion.div>
+          </div>
+
           {/* Forecast Section */}
           <div className="space-y-4">
             <div className="flex items-center gap-2 mb-3">
@@ -163,14 +181,7 @@ export function QuantumPanel({ isOpen, onClose }: QuantumPanelProps) {
                   transition={{ delay: idx * 0.1 + 0.3 }}
                   className="bg-white/5 backdrop-blur-sm border border-purple-500/30 rounded-lg p-4 hover:bg-white/10 transition-colors cursor-pointer group"
                 >
-                  <div className="flex items-start gap-3">
-                    <div className={`mt-0.5 px-2 py-1 rounded text-xs font-bold ${
-                      rec.priority === 'High' ? 'bg-red-500/20 text-red-300' :
-                      rec.priority === 'Medium' ? 'bg-yellow-500/20 text-yellow-300' :
-                      'bg-blue-500/20 text-blue-300'
-                    }`}>
-                      {rec.priority}
-                    </div>
+                  <div className="flex items-start justify-between gap-3">
                     <div className="flex-1">
                       <h4 className="text-sm font-semibold text-white mb-1 group-hover:text-purple-300 transition-colors">
                         {rec.title}
@@ -183,29 +194,19 @@ export function QuantumPanel({ isOpen, onClose }: QuantumPanelProps) {
                         <span>{rec.action}</span>
                       </div>
                     </div>
+                    <div className={`mt-0.5 px-2 py-1 rounded text-xs font-bold shrink-0 ${
+                      rec.priority === 'High' ? 'bg-red-500/20 text-red-300' :
+                      rec.priority === 'Medium' ? 'bg-yellow-500/20 text-yellow-300' :
+                      'bg-blue-500/20 text-blue-300'
+                    }`}>
+                      {rec.priority}
+                    </div>
                   </div>
                 </motion.div>
               ))}
             </div>
           </div>
 
-          {/* Confidence Score */}
-          <div className="pt-4 border-t border-purple-500/30">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.8 }}
-              className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-400/40 rounded-lg p-4"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-semibold text-white">Analysis Confidence</span>
-                <span className="text-2xl font-bold text-purple-300">94%</span>
-              </div>
-              <p className="text-xs text-purple-200">
-                Based on 1,247 data points and 50,000+ similar patient outcomes in quantum database
-              </p>
-            </motion.div>
-          </div>
         </div>
       </motion.div>
     </>

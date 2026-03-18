@@ -643,25 +643,6 @@ export function WaveVisualization({ onClose, pendingPostId, onPendingPostHandled
                 </button>
               )}
               
-              {/* Quantum Computing Button */}
-              <button
-                onClick={() => setShowQuantumPanel(true)}
-                className="group"
-                title="Quantum Forecasts & Recommendations"
-              >
-                <div className="relative">
-                  <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center shadow-md transition-all group-hover:shadow-lg group-hover:scale-110">
-                    <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <circle cx="12" cy="12" r="2" fill="white" />
-                      <ellipse cx="12" cy="12" rx="10" ry="4" strokeWidth="1.5" />
-                      <ellipse cx="12" cy="12" rx="10" ry="4" strokeWidth="1.5" transform="rotate(60 12 12)" />
-                      <ellipse cx="12" cy="12" rx="10" ry="4" strokeWidth="1.5" transform="rotate(120 12 12)" />
-                    </svg>
-                  </div>
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-pulse"></div>
-                </div>
-              </button>
-              
               <button
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 border-cyan-500 text-cyan-600"
               >

@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OncoClear — Patient</title>
+  <link rel="stylesheet" href="shared.css">
+  <style>
+    /* ── PATIENT HEADER BANNER ── */
+    .pt-banner {
+      position: relative;
+      padding: var(--sp-16);
+      margin-bottom: 0;
+      overflow: hidden;
+    }
+
+    .pt-banner-urgency {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+    }
+    .pu-red    { background: linear-gradient(90deg, var(--red), transparent); }
+    .pu-yellow { background: linear-gradient(90deg, var(--yellow), transparent); }
+    .pu-green  { background: linear-gradient(90deg, var(--green), transparent); }
+
+    .pt-banner-grid {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: var(--sp-16);
+      align-items: start;
+    }
+
+    @media (max-width: 768px) {
+      .pt-banner-grid { grid-template-columns: 1fr; }
+      .pt-banner-actions { display: grid; grid-template-columns: repeat(3,1fr); gap: var(--sp-4); }
+    }
+
+    .pt-big-av {
+      width: 60px; height: 60px;
+      border-radius: 50%;
+      background: rgba(10,132,255,.15);
+      border: 1px solid rgba(10,132,255,.32);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 17px; font-weight: 700;
+      color: var(--ta);
+      flex-shrink: 0;
+    }
+
+    .pt-main-name {
+      font-family: var(--font-serif);
+      font-size: clamp(22px,3vw,32px);
+      font-weight: 400;
+      letter-spacing: -1px;
+      color: var(--t1);
+      margin-bottom: 4px;
+    }
+
+    .pt-info-row {
+      font-size: 12.5px;
+      color: var(--t2);
+      margin-bottom: var(--sp-8);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .pt-info-divider { color: var(--t3); }
+
+    .pt-tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--sp-4);
+      margin-bottom: var(--sp-8);
+    }
+
+    .pt-vitals-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--sp-4);
+    }
+
+    @media (max-width: 700px) {
+      .pt-vitals-row { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .pt-banner-actions {
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-6);
+      min-width: 136px;
+    }
+
+    /* ── STICKY TAB BAR ── */
+    .tab-bar {
+      position: sticky;
+      top: 58px;
+      z-index: 200;
+      background: var(--nav-bg);
+      border-bottom: 1px solid var(--nav-bd);
+      backdrop-filter: blur(28px) saturate(2);
+      -webkit-backdrop-filter: blur(28px) saturate(2);
+      display: flex;
+      align-items: center;
+      max-width: 100%;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .tab-bar::-webkit-scrollbar { display: none; }
+
+    .tab-bar-inner {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      padding: 0 var(--sp-16);
+      min-width: max-content;
+    }
+
+    .tab-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 14px 18px;
+      font-size: 13.5px;
+      font-weight: 400;
+      color: var(--t2);
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: color var(--fast), border-color var(--fast);
+      white-space: nowrap;
+      cursor: pointer;
+      background: none;
+      border-top: none; border-left: none; border-right: none;
+    }
+
+    .tab-btn:hover { color: var(--t1); }
+    .tab-btn.active { color: var(--ta); border-bottom-color: var(--ta); font-weight: 500; }
+
+    .tab-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: var(--r-pill);
+      background: rgba(255,69,58,.18);
+      border: 1px solid rgba(255,69,58,.35);
+      color: var(--red);
+    }
+
+    /* ── TAB PANELS ── */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; animation: rise .35s var(--ease) both; }
+
+    /* ── OVERVIEW: General Oncology module (collapsible) ── */
+    .collapse-section {
+      border-radius: var(--r-lg);
+      overflow: hidden;
+      margin-bottom: var(--sp-12);
+    }
+
+    .collapse-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--sp-12) var(--sp-16);
+      cursor: pointer;
+      user-select: none;
+      transition: background var(--fast);
+    }
+
+    .collapse-header:hover { background: var(--g-bg-h); }
+
+    .collapse-header-left {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-8);
+    }
+
+    .collapse-arrow {
+      font-size: 11px;
+      color: var(--t3);
+      transition: transform var(--mid) var(--ease);
+    }
+
+    .collapse-section.open .collapse-arrow { transform: rotate(180deg); }
+
+    .collapse-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height .45s var(--ease);
+    }
+
+    .collapse-section.open .collapse-body { max-height: 600px; }
+
+    .collapse-inner { padding: 0 var(--sp-16) var(--sp-16); }
+
+    /* ── GENERAL ONCOLOGY module mini ── */
+    .gen-onc-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--sp-8);
+    }
+
+    @media (max-width: 700px) { .gen-onc-grid { grid-template-columns: repeat(2,1fr); } }
+
+    .go-tile {
+      padding: var(--sp-8);
+      border-radius: var(--r-sm);
+      border: 1px solid var(--g-bd);
+      background: rgba(255,255,255,.02);
+    }
+
+    [data-theme="light"] .go-tile { background: rgba(255,255,255,.55); }
+
+    .go-key  { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--t3); margin-bottom: 3px; }
+    .go-val  { font-size: 13px; font-weight: 500; color: var(--t1); line-height: 1.35; }
+
+    /* ── LABS tab navigation ── */
+    .lab-panel-content { display: none; }
+    .lab-panel-content.active { display: block; animation: rise .25s var(--ease) both; }
+
+    /* ── REPORT GENERATOR ── */
+    .rg-form {
+      display: flex;
+      gap: var(--sp-8);
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .rg-select {
+      flex: 1;
+      min-width: 200px;
+      padding: 10px var(--sp-12);
+      border-radius: var(--r-md);
+      border: 1px solid var(--g-bd);
+      background: var(--g-bg);
+      color: var(--t1);
+      font-size: 13.5px;
+      backdrop-filter: blur(12px);
+    }
+
+    .rg-select option { background: var(--bg); }
+
+    /* ── ECOG badge ── */
+    .ecog-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: var(--r-pill);
+      background: rgba(255,159,10,.12);
+      border: 1px solid rgba(255,159,10,.28);
+      color: var(--orange);
+    }
+  </style>
+</head>
+<body>
+  <div class="noise"></div>
+  <div class="bg">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+    <div class="orb orb-4"></div>
+  </div>
+
+  <nav class="nav" id="main-nav"></nav>
+
+  <!-- Patient Header Banner (sticky-ish, just below nav) -->
+  <div class="gc pt-banner" id="pt-banner" style="border-radius:0;border-top:none;border-left:none;border-right:none;position:sticky;top:58px;z-index:300">
+    <!-- rendered by JS -->
+  </div>
+
+  <!-- Sticky Tab Bar -->
+  <div class="tab-bar">
+    <div class="tab-bar-inner">
+      <button class="tab-btn active" data-tab="overview">
+        Overview
+      </button>
+      <button class="tab-btn" data-tab="timeline">
+        Timeline
+      </button>
+      <button class="tab-btn" data-tab="labs">
+        Labs
+      </button>
+      <button class="tab-btn" data-tab="reports" id="reports-tab-btn">
+        Reports
+      </button>
+    </div>
+  </div>
+
+  <main class="page" style="padding-top: var(--sp-16)">
+
+    <!-- ═══════════════════════════════════════
+         OVERVIEW TAB
+    ═══════════════════════════════════════ -->
+    <div class="tab-panel active" id="tab-overview">
+
+      <!-- Alerts -->
+      <div id="ov-alerts" class="mb-16" style="display:none">
+        <div class="sec-title"><span>⚠️</span> Active Alerts</div>
+        <div class="flex flex-col gap-6" id="ov-alerts-list"></div>
+      </div>
+
+      <!-- Collapsible: General Oncology Snapshot -->
+      <div class="collapse-section gc mb-16" id="gen-onc-collapse" style="margin-bottom:var(--sp-12)">
+        <div class="collapse-header" id="gen-onc-toggle">
+          <div class="collapse-header-left">
+            <span style="font-size:18px">🧬</span>
+            <div>
+              <div style="font-size:14px;font-weight:500;color:var(--t1)">General Oncology Snapshot</div>
+              <div style="font-size:11px;color:var(--t3)">Cross-specialty clinical context — click to expand / collapse</div>
+            </div>
+          </div>
+          <span class="collapse-arrow">▼</span>
+        </div>
+        <div class="collapse-body" id="gen-onc-body">
+          <div class="collapse-inner" id="gen-onc-inner">
+            <!-- rendered by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Specialty-Specific Tiers -->
+      <div id="specialty-section">
+        <div style="display:flex;align-items:center;gap:var(--sp-8);margin-bottom:var(--sp-12)">
+          <span id="specialty-icon" style="font-size:22px"></span>
+          <div>
+            <div class="label" id="specialty-label"></div>
+            <div style="font-size:12px;color:var(--t3)">Specialty-specific clinical data — tiered for progressive disclosure</div>
+          </div>
+        </div>
+        <div id="specialty-content">
+          <!-- rendered by JS -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════
+         TIMELINE TAB
+    ═══════════════════════════════════════ -->
+    <div class="tab-panel" id="tab-timeline">
+      <div class="sec-title mb-16"><span>⏱</span> Clinical Timeline <span class="sec-num" id="tl-count"></span></div>
+      <div style="display:grid;grid-template-columns:1fr 300px;gap:var(--sp-12)">
+        <div class="gc gc-sm p-16" style="padding-left:var(--sp-8)">
+          <div class="tl" id="tl-events"></div>
+        </div>
+        <!-- Timeline sidebar: current status summary -->
+        <div style="display:flex;flex-direction:column;gap:var(--sp-12)">
+          <div class="gc gc-sm p-12">
+            <div class="label mb-8">Current Status</div>
+            <div id="tl-status-summary"></div>
+          </div>
+          <div class="gc gc-sm p-12">
+            <div class="label mb-8">Diagnosis — to — Now</div>
+            <div id="tl-dx-to-now" class="flex flex-col gap-6" style="font-size:12px;color:var(--t2)"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+         LABS TAB
+    ═══════════════════════════════════════ -->
+    <div class="tab-panel" id="tab-labs">
+      <div class="sec-title mb-16"><span>🔬</span> Laboratory Results <span class="sec-num" id="lab-collected"></span></div>
+
+      <!-- Critical values -->
+      <div id="lab-criticals" class="mb-16" style="display:none">
+        <div class="sec-title" style="font-size:15px;color:var(--red)"><span>🚨</span> Critical Values</div>
+        <div class="flex flex-col gap-6" id="lab-criticals-list"></div>
+      </div>
+
+      <!-- Lab Panel Card -->
+      <div class="gc" style="overflow:hidden">
+        <div class="lab-tabs" id="lab-tabs">
+          <button class="lab-tab active" data-panel="cbc">CBC / Hematology</button>
+          <button class="lab-tab" data-panel="cmp">CMP / Chemistry</button>
+        </div>
+
+        <div class="lab-panel-content active" id="lab-panel-cbc" style="padding:var(--sp-8) 0">
+          <table class="lab-table" id="lab-cbc-table">
+            <thead>
+              <tr>
+                <th style="min-width:130px">Test</th>
+                <th>Result</th>
+                <th>Unit</th>
+                <th>Reference</th>
+                <th>Flag</th>
+                <th style="width:90px">Range</th>
+              </tr>
+            </thead>
+            <tbody id="lab-cbc-body"></tbody>
+          </table>
+        </div>
+
+        <div class="lab-panel-content" id="lab-panel-cmp" style="padding:var(--sp-8) 0">
+          <table class="lab-table" id="lab-cmp-table">
+            <thead>
+              <tr>
+                <th style="min-width:130px">Test</th>
+                <th>Result</th>
+                <th>Unit</th>
+                <th>Reference</th>
+                <th>Flag</th>
+                <th style="width:90px">Range</th>
+              </tr>
+            </thead>
+            <tbody id="lab-cmp-body"></tbody>
+          </table>
+        </div>
+
+        <div style="padding:var(--sp-8) var(--sp-16);border-top:1px solid var(--tbl-bd);font-size:11px;color:var(--t3)" id="lab-collected-note"></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+         REPORTS TAB
+    ═══════════════════════════════════════ -->
+    <div class="tab-panel" id="tab-reports">
+      <div class="sec-title mb-16"><span>📋</span> Clinical Reports</div>
+
+      <!-- Pending reports -->
+      <div id="pending-reports-wrap">
+        <div class="sec-title" style="font-size:15px;color:var(--orange)"><span>🖊</span> Pending Signature</div>
+        <div class="flex flex-col gap-8 mb-16" id="pending-reports-list"></div>
+      </div>
+
+      <!-- Completed reports -->
+      <div>
+        <div class="sec-title" style="font-size:15px"><span>✓</span> Completed</div>
+        <div class="grid-2 mb-16" id="completed-reports-list"></div>
+      </div>
+
+      <!-- AI Report Generator -->
+      <div>
+        <div class="sec-title" style="font-size:15px"><span>✨</span> Generate Report</div>
+        <div class="gc gc-sm p-16">
+          <div style="font-size:14px;font-weight:500;color:var(--t1);margin-bottom:4px">AI-Assisted Report Generator</div>
+          <div style="font-size:12.5px;color:var(--t2);margin-bottom:var(--sp-12)">Generate a draft clinical note. Review and edit before signing.</div>
+          <div class="rg-form">
+            <select class="rg-select" id="rg-type">
+              <option value="">Select report type…</option>
+              <option value="progress">Progress Note</option>
+              <option value="consult">Consultation Note</option>
+              <option value="procedure">Procedure Note</option>
+              <option value="discharge">Discharge Summary</option>
+              <option value="tumor-board">Tumor Board Presentation</option>
+            </select>
+            <button class="btn btn-primary" id="rg-generate">
+              Generate Draft <span class="arr">→</span>
+            </button>
+          </div>
+          <div id="rg-output" style="display:none;margin-top:var(--sp-12);padding:var(--sp-12);border-radius:var(--r-md);background:rgba(48,209,88,.06);border:1px solid rgba(48,209,88,.22);font-size:12.5px;color:var(--t2);line-height:1.6">
+            <!-- Generated report preview -->
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <footer class="footer">
+    <div class="footer-in">
+      <div class="footer-brand">⚕ OncoClear</div>
+      <div class="footer-disc">Not for actual clinical use. All patient data is de-identified demonstration only.</div>
+      <div class="footer-links">
+        <a href="dashboard.html" class="footer-link">← Queue</a>
+        <a href="index.html"     class="footer-link">Sign out</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+    /* ── AUTH ── */
+    const doctor  = Session.requireAuth();
+    const patient = Session.getPatient();
+    if (!doctor || !patient) { window.location.href = 'dashboard.html'; throw new Error(); }
+
+    const cfg = OC.specialtyConfig[patient.specialty] || {};
+
+    /* ── NAV ── */
+    Nav.render(doctor, 'dashboard', patient.name);
+
+    /* ── PATIENT BANNER ── */
+    function renderBanner(p) {
+      const stripeCls = p.status === 'urgent' ? 'pu-red' : p.status === 'watchlist' ? 'pu-yellow' : 'pu-green';
+      const vitalsHtml = Object.entries(p.tier1.vitals).slice(0,4).map(([k, v]) => {
+        const cls  = v.status === 'critical' ? 'vv-crit' : v.status === 'warn' ? 'vv-warn' : 'vv-norm';
+        const tcls = v.trend === 'down' ? 'vt-down' : (v.trend === 'up' && (v.status==='critical'||v.status==='warn')) ? 'vt-up-bad' : 'vt-stable';
+        return `<div class="vital-tile gt gc-xs">
+          <div class="vl">${k.toUpperCase().substring(0,6)}</div>
+          <div class="vv ${cls}">${v.value}<span class="vu"> ${v.unit}</span></div>
+          <div class="vtrend ${tcls}">${v.delta}</div>
+        </div>`;
+      }).join('');
+
+      document.getElementById('pt-banner').innerHTML = `
+        <div class="pt-banner-urgency ${stripeCls}"></div>
+        <div class="pt-banner-grid">
+          <div class="pt-big-av">${p.initials}</div>
+
+          <div>
+            <div class="pt-main-name">${p.name}</div>
+            <div class="pt-info-row">
+              <span>${p.age}y ${p.sex}</span>
+              <span class="pt-info-divider">·</span>
+              <span>DOB ${p.dob}</span>
+              <span class="pt-info-divider">·</span>
+              <span>MRN ${p.mrn}</span>
+              <span class="pt-info-divider">·</span>
+              <span>${p.appointmentType}</span>
+            </div>
+            <div class="pt-tag-row">
+              ${Render.statusPill(p.status, p.statusLabel)}
+              <span class="tag tag-orange">${p.stage}</span>
+              <span class="tag tag-blue">${p.currentTherapy.split(' ').slice(0,2).join(' ')} · ${p.cycleInfo}</span>
+              <span class="ecog-badge">ECOG ${p.ecog}</span>
+              ${p.urgencyReason ? `<span class="tag tag-red" style="font-size:10px">${p.urgencyReason.substring(0,50)}…</span>` : ''}
+            </div>
+            <div class="pt-vitals-row">${vitalsHtml}</div>
+          </div>
+
+          <div class="pt-banner-actions">
+            <a href="dashboard.html" class="btn btn-ghost btn-sm">← Queue</a>
+            <button class="btn btn-ghost btn-sm" onclick="window.print()">🖨 Print</button>
+            <div style="font-size:10px;color:var(--t3);text-align:center;padding-top:2px">
+              ${cfg.icon} ${cfg.label}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    /* ── TABS ── */
+    const tabBtns   = document.querySelectorAll('.tab-btn');
+    const tabPanels = document.querySelectorAll('.tab-panel');
+
+    tabBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.tab;
+        tabBtns.forEach(b => b.classList.remove('active'));
+        tabPanels.forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(`tab-${target}`).classList.add('active');
+        // Re-run animations
+        requestAnimationFrame(() => { Motion.animateBars(); Motion.animateGauges(); Motion.drawSparklines(); });
+      });
+    });
+
+    /* ── OVERVIEW TAB ── */
+    function renderOverview(p) {
+      // Alerts
+      if (p.alerts && p.alerts.length > 0) {
+        document.getElementById('ov-alerts').style.display = 'block';
+        document.getElementById('ov-alerts-list').innerHTML = p.alerts.map(Render.alertBanner).join('');
+      }
+
+      // Reports tab badge
+      if (p.reports.pending.length > 0) {
+        document.getElementById('reports-tab-btn').innerHTML =
+          `Reports <span class="tab-badge">${p.reports.pending.length}</span>`;
+      }
+
+      // General Oncology Snapshot (collapsed by default)
+      const goItems = [
+        { k: 'Primary Dx',    v: p.diagnosisShort },
+        { k: 'Stage',         v: p.stage },
+        { k: 'Therapy',       v: p.currentTherapy },
+        { k: 'Cycle',         v: p.cycleInfo },
+        { k: 'Performance',   v: `ECOG ${p.ecog}` },
+        { k: 'Diagnosis Sub', v: p.diagnosisSub.split('·')[0].trim() },
+        { k: 'Appointment',   v: p.appointmentType.split('—')[0].trim() },
+        { k: 'MRN',           v: p.mrn },
+      ];
+      document.getElementById('gen-onc-inner').innerHTML = `
+        <div class="gen-onc-grid">
+          ${goItems.map(g => `<div class="go-tile">
+            <div class="go-key">${g.k}</div>
+            <div class="go-val">${g.v}</div>
+          </div>`).join('')}
+        </div>`;
+
+      // Collapsible toggle
+      const collapse = document.getElementById('gen-onc-collapse');
+      document.getElementById('gen-onc-toggle').addEventListener('click', () => {
+        collapse.classList.toggle('open');
+      });
+
+      // Specialty label
+      document.getElementById('specialty-icon').textContent  = cfg.icon || '🏥';
+      document.getElementById('specialty-label').textContent = (cfg.label || p.specialty).toUpperCase() + ' — TIERED CLINICAL VIEW';
+
+      // Specialty content
+      document.getElementById('specialty-content').innerHTML = SpecialtyRender.render(p);
+
+      Motion.initAll();
+    }
+
+    /* ── TIMELINE TAB ── */
+    function renderTimeline(p) {
+      const events = p.timeline || [];
+      document.getElementById('tl-count').textContent = `${events.length} events`;
+      document.getElementById('tl-events').innerHTML  = events.map(Render.tlItem).join('');
+
+      // Current status summary
+      const active = events.filter(e => e.status === 'active');
+      document.getElementById('tl-status-summary').innerHTML = `
+        <div style="font-family:var(--font-serif);font-size:16px;font-weight:400;color:var(--t1);margin-bottom:6px">
+          ${active.length ? active[active.length-1].title : 'See timeline'}
+        </div>
+        ${Render.statusPill(p.status, p.statusLabel)}
+        <div style="font-size:12px;color:var(--t2);margin-top:8px">${p.currentTherapy} · ${p.cycleInfo}</div>`;
+
+      // Dx-to-now chain
+      document.getElementById('tl-dx-to-now').innerHTML = events.map(e => `
+        <div class="flex items-center gap-6">
+          <div class="dot ${e.status==='active'?'dot-blue':e.status==='warn'?'dot-yellow':'dot-green'}"></div>
+          <div>
+            <div style="font-size:11.5px;font-weight:500;color:var(--t1)">${e.date}</div>
+            <div style="font-size:11px;color:var(--t3)">${e.title}</div>
+          </div>
+        </div>`).join('');
+    }
+
+    /* ── LABS TAB ── */
+    function renderLabs(p) {
+      const labs = p.labs;
+      if (!labs) return;
+
+      document.getElementById('lab-collected').textContent = `Collected ${labs.collected}`;
+      document.getElementById('lab-collected-note').textContent =
+        `Collected: ${labs.collected} · Verified by: ${labs.verifiedBy} · ${labs.facility}`;
+
+      // Critical values
+      const criticals = [...(labs.cbc || []), ...(labs.cmp || [])].filter(l => l.status === 'critical');
+      if (criticals.length > 0) {
+        document.getElementById('lab-criticals').style.display = 'block';
+        document.getElementById('lab-criticals-list').innerHTML = criticals.map(l => `
+          <div class="alert alert-critical">
+            <span class="alert-icon">🚨</span>
+            <div>
+              <strong style="font-size:13px">${l.test}</strong> —
+              <span class="lab-val crit">${l.value} ${l.unit}</span>
+              <span style="font-size:11.5px;color:var(--t3);margin-left:6px">Ref: ${l.ref}</span>
+            </div>
+          </div>`).join('');
+      }
+
+      // CBC table
+      document.getElementById('lab-cbc-body').innerHTML = (labs.cbc || []).map(Render.labRow).join('');
+      // CMP table
+      document.getElementById('lab-cmp-body').innerHTML = (labs.cmp || []).map(Render.labRow).join('');
+
+      // Lab tab switching
+      document.querySelectorAll('.lab-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('.lab-tab').forEach(t => t.classList.remove('active'));
+          document.querySelectorAll('.lab-panel-content').forEach(p => p.classList.remove('active'));
+          tab.classList.add('active');
+          document.getElementById(`lab-panel-${tab.dataset.panel}`).classList.add('active');
+          Motion.animateBars();
+        });
+      });
+
+      Motion.animateBars();
+    }
+
+    /* ── REPORTS TAB ── */
+    function renderReports(p) {
+      const reps = p.reports;
+      if (!reps) return;
+
+      if (reps.pending.length > 0) {
+        document.getElementById('pending-reports-list').innerHTML = reps.pending.map(Render.reportPending).join('');
+      } else {
+        document.getElementById('pending-reports-wrap').innerHTML =
+          `<div style="font-size:12.5px;color:var(--t3);padding:var(--sp-8) 0">No reports pending signature.</div>`;
+      }
+
+      if (reps.completed.length > 0) {
+        document.getElementById('completed-reports-list').innerHTML = reps.completed.map(Render.reportCompleted).join('');
+      }
+
+      // Report generator
+      document.getElementById('rg-generate').addEventListener('click', () => {
+        const type  = document.getElementById('rg-type').value;
+        const btn   = document.getElementById('rg-generate');
+        const out   = document.getElementById('rg-output');
+        if (!type) { alert('Please select a report type.'); return; }
+
+        btn.innerHTML = 'Generating… ⋯';
+        btn.disabled  = true;
+        btn.style.opacity = '.6';
+
+        setTimeout(() => {
+          const drafts = {
+            progress:    `PROGRESS NOTE — ${patient.name} · ${new Date().toLocaleDateString()}\n\nDiagnosis: ${patient.diagnosis}\nStage: ${patient.stage}\nCurrent Therapy: ${patient.currentTherapy} (${patient.cycleInfo})\n\nInterval History: Patient presents for scheduled follow-up. ${patient.urgencyReason ? 'Notable: ' + patient.urgencyReason + '.' : 'No acute complaints.'}\n\nPhysical Exam: ECOG ${patient.ecog}. Hemodynamically stable. No acute distress.\n\nLaboratory: See attached results.\n\nAssessment & Plan:\n1. ${patient.diagnosis} — ${patient.stage}. Continue current regimen.\n2. Monitor as per protocol.\n\n[DRAFT — Review before signing]`,
+            consult:     `CONSULTATION NOTE — ${patient.name}\n\nRequesting service requests oncologic consultation for ${patient.diagnosis}.\n\nHPI: ${patient.age}y ${patient.sex} with ${patient.diagnosisSub}. Currently on ${patient.currentTherapy}.\n\nRecommendations: Continue current therapy. Follow-up in 3 weeks.\n\n[DRAFT — Review before signing]`,
+            'tumor-board': `TUMOR BOARD PRESENTATION — ${patient.name}\n\nDiagnosis: ${patient.diagnosis} · ${patient.diagnosisSub}\nKey Mutations: ${(patient.tier2?.mutations||[]).filter(m=>m.positive).map(m=>m.name).join(', ') || 'See report'}\nCurrent Status: ${patient.urgencyReason || 'Stable on therapy'}\n\nDiscussion Points:\n1. Current response to ${patient.currentTherapy}\n2. ${(patient.alerts||[]).map(a=>a.text).slice(0,2).join('\n3. ')}\n\n[DRAFT — Review before signing]`
+          };
+          const text = drafts[type] || `${type.toUpperCase()} NOTE — ${patient.name}\n\nDiagnosis: ${patient.diagnosis}\nStage: ${patient.stage}\nTherapy: ${patient.currentTherapy}\n\n[DRAFT — Complete and review before signing]`;
+
+          out.style.display = 'block';
+          out.innerHTML = `<pre style="white-space:pre-wrap;font-family:var(--font-mono);font-size:11.5px;color:var(--t1);line-height:1.7">${text}</pre>
+            <div class="flex gap-6" style="margin-top:var(--sp-12)">
+              <button class="btn btn-primary btn-sm">Sign & File</button>
+              <button class="btn btn-ghost btn-sm">Edit Draft</button>
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('rg-output').style.display='none'">Discard</button>
+            </div>`;
+
+          btn.innerHTML = 'Generate Draft <span class="arr">→</span>';
+          btn.disabled  = false;
+          btn.style.opacity = '1';
+        }, 1400);
+      });
+    }
+
+    /* ── MOUNT ALL ── */
+    renderBanner(patient);
+    renderOverview(patient);
+    renderTimeline(patient);
+    renderLabs(patient);
+    renderReports(patient);
+
+    Motion.initAll();
+  </script>
+</body>
+</html>

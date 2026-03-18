@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays, Bell, Sun, Moon, SlidersHorizontal, Layers3, Stethoscope, Microscope } from "lucide-react";
+import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays, Bell, Sun, Moon, SlidersHorizontal, Layers3, Stethoscope, Microscope } from "lucide-react";
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -8,8 +8,10 @@ import { format } from "date-fns";
 import ClinicalTrialsPage from "./ClinicalTrialsPage";
 import TrendingResearchPage from "./TrendingResearchPage";
 import AIPage from "./AIPage";
+import DashboardPage from "./DashboardPage";
+import PatientChartPage from "./PatientChartPage";
 import NewsFeedPanel from "./NewsFeedPanel";
-import { WaveVisualization } from './keywords-wave';
+import { QuantumPanel, WaveVisualization } from './keywords-wave';
 import { useAuth } from '../lib/AuthContext';
 import ProfilePanel from './ProfilePanel';
 import NotificationsPanel from './NotificationsPanel';
@@ -389,7 +391,7 @@ interface DashboardProps {
   onToggleTheme: () => void;
 }
 
-type ActiveView = "timeline" | "trials" | "research" | "ai";
+type ActiveView = "dashboard" | "patientChart" | "timeline" | "trials" | "research" | "ai";
 type FeatureScope = "all" | "clinical" | "research";
 
 const getDefaultViewForScope = (scope: FeatureScope): ActiveView =>
@@ -416,7 +418,9 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
   const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState("30 minutes ago");
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeView, setActiveView] = useState<ActiveView>("timeline");
+  const [activeView, setActiveView] = useState<ActiveView>("dashboard");
+  const [chartBackView, setChartBackView] = useState<ActiveView>("dashboard");
+  const [isGlobalQuantumOpen, setIsGlobalQuantumOpen] = useState(false);
   const [featureScope, setFeatureScope] = useState<FeatureScope>(() => {
     const saved = localStorage.getItem("maps-feature-scope");
     return saved === "clinical" || saved === "research" ? saved : "all";
@@ -436,8 +440,8 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
   const isResearchEnabled = featureScope !== "clinical";
 
   const isViewAllowed = useCallback((view: ActiveView, scope: FeatureScope) => {
-    if (scope === "clinical") return view === "timeline" || view === "ai";
-    if (scope === "research") return view === "trials" || view === "research";
+    if (scope === "clinical") return view === "dashboard" || view === "patientChart" || view === "timeline" || view === "ai";
+    if (scope === "research") return view === "dashboard" || view === "trials" || view === "research";
     return true;
   }, []);
 
@@ -565,17 +569,22 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
     <>
       <button
         onClick={onToggleTheme}
-        className="p-2 bg-white hover:bg-gray-100 rounded-full transition-colors shadow-sm border border-gray-200"
+        className="p-2 hover:bg-gray-100 rounded-full transition-colors"
         title={isDark ? "Switch to light mode" : "Switch to dark mode"}
       >
         {isDark ? <Sun className="w-5 h-5 text-gray-600" /> : <Moon className="w-5 h-5 text-gray-600" />}
       </button>
       <button
         onClick={() => setIsNotificationsOpen(true)}
-        className="p-2 bg-white hover:bg-gray-100 rounded-full transition-colors shadow-sm border border-gray-200"
+        className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
         title="Notifications"
       >
         <Bell className="w-5 h-5 text-gray-600" />
+        {unreadNotifications > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+            {unreadNotifications > 9 ? '9+' : unreadNotifications}
+          </span>
+        )}
       </button>
       <button
         onClick={() => setIsProfileOpen(true)}
@@ -689,6 +698,17 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
         <img src={mapsWhiteLogo} alt="MAPS icon" className="h-[30px] w-[30px] object-contain" />
         
         <div className="flex-1 flex flex-col gap-4 pt-8">
+          <button 
+            onClick={() => {
+              setActiveView("dashboard");
+              setShowKeywordsTree(false);
+            }}
+            className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-lg ${
+              activeView === "dashboard" ? "bg-white" : "bg-white/10 hover:bg-white/20 hover:scale-110"
+            }`}
+          >
+            <LayoutDashboard className={`w-6 h-6 ${activeView === "dashboard" ? "text-indigo-600" : "text-white"}`} />
+          </button>
           {isClinicalEnabled && (
             <button 
               onClick={() => {
@@ -722,17 +742,23 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
               <Activity className={`w-6 h-6 ${activeView === "research" ? "text-indigo-600" : "text-white"}`} />
             </button>
           )}
-          {isClinicalEnabled && (
-            <button 
-              onClick={() => setActiveView("ai")}
-              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-                activeView === "ai" ? "bg-white shadow-lg" : "bg-white/10 hover:bg-white/20 hover:scale-110"
-              } group`}
-            >
-              <Sparkles className={`w-6 h-6 ${activeView === "ai" ? "text-indigo-600" : "text-white"}`} />
-            </button>
-          )}
+          {/* AI nav button hidden for now */}
         </div>
+
+        <button
+          onClick={() => {
+            setIsGlobalQuantumOpen(true);
+          }}
+          className="w-12 h-12 rounded-xl flex items-center justify-center transition-all bg-white/10 hover:bg-white/20 hover:scale-110"
+          title="Quantum Analysis"
+        >
+          <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <circle cx="12" cy="12" r="2" fill="currentColor" />
+            <ellipse cx="12" cy="12" rx="10" ry="4" strokeWidth="1.5" />
+            <ellipse cx="12" cy="12" rx="10" ry="4" strokeWidth="1.5" transform="rotate(60 12 12)" />
+            <ellipse cx="12" cy="12" rx="10" ry="4" strokeWidth="1.5" transform="rotate(120 12 12)" />
+          </svg>
+        </button>
 
         <div ref={scopePickerRef} className="relative">
           <button
@@ -761,26 +787,40 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
             isDark={isDark}
             onToggleTheme={onToggleTheme}
           />
+        ) : activeView === "dashboard" ? (
+          <DashboardPage
+            selectedPatient={selectedPatient}
+            onChangePatient={onChangePatient}
+            onOpenPatientChart={() => {
+              setChartBackView(activeView);
+              setActiveView("patientChart");
+              setShowKeywordsTree(false);
+            }}
+            headerActions={renderHeaderActions()}
+            onAskAI={() => {
+              setIsAIPanelOpen(true);
+              setTimeout(() => setIsAIPanelVisible(true), 10);
+            }}
+          />
+        ) : activeView === "patientChart" ? (
+          <PatientChartPage
+            selectedPatient={selectedPatient}
+            onChangePatient={onChangePatient}
+            onBack={() => {
+              setActiveView(chartBackView);
+              setShowKeywordsTree(false);
+            }}
+          />
         ) : activeView === "timeline" ? (
           <>
             {/* Header */}
-            <div className="bg-white border-b border-gray-200 shadow-sm">
+            <div className="bg-white">
               <div className="px-8 py-6">
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <div className="flex items-center gap-3">
-                      <h1 className="text-gray-900 mb-1">
-                        {selectedPatient ? selectedPatient.name : 'Patient Timeline'}
-                      </h1>
-                      {onChangePatient && (
-                        <button
-                          onClick={onChangePatient}
-                          className="text-xs text-indigo-600 hover:text-indigo-700 font-medium px-2 py-1 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors"
-                        >
-                          Change Patient
-                        </button>
-                      )}
-                    </div>
+                    <h1 className="text-gray-900 mb-1">
+                      {selectedPatient ? selectedPatient.name : 'Patient Timeline'}
+                    </h1>
                     <p className="text-gray-500">
                       {selectedPatient
                         ? `${selectedPatient.age}yo ${selectedPatient.gender} · ${selectedPatient.diagnoses[0]} · ${selectedPatient.mrn}`
@@ -939,18 +979,6 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
                       >
                         <Newspaper className="w-4 h-4" />
                         News Feed
-                      </button>
-                    )}
-                    {isClinicalEnabled && (
-                      <button 
-                        onClick={() => {
-                          setIsAIPanelOpen(true);
-                          setTimeout(() => setIsAIPanelVisible(true), 10);
-                        }}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
-                      >
-                        <Sparkles className="w-4 h-4" />
-                        Ask AI
                       </button>
                     )}
                   </div>
@@ -1606,6 +1634,9 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
         onClose={() => setIsNotificationsOpen(false)}
         onNotificationClick={handleNotificationNav}
       />
+
+      {/* Global Quantum Side Panel */}
+      <QuantumPanel isOpen={isGlobalQuantumOpen} onClose={() => setIsGlobalQuantumOpen(false)} />
     </div>
   );
 }

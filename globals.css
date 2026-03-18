@@ -249,3 +249,27 @@ textarea:-webkit-autofill:focus {
 .app-dark .shadow-lg {
   box-shadow: 0 10px 30px rgba(2, 6, 23, 0.55) !important;
 }
+
+/* Quantum panel scrollbar uses transparent track */
+.quantum-scroll {
+  scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+}
+
+.quantum-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+
+.quantum-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.quantum-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.quantum-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.55);
+}

@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OncoClear — Dashboard</title>
+  <link rel="stylesheet" href="shared.css">
+  <style>
+    /* ── NEXT PATIENT HERO ── */
+    .next-patient-hero {
+      position: relative;
+      padding: var(--sp-16);
+      cursor: pointer;
+    }
+
+    .urgency-stripe {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 4px;
+      border-radius: 4px 0 0 4px;
+    }
+    .us-red    { background: linear-gradient(180deg, var(--red),    rgba(255,69,58,.2)); }
+    .us-yellow { background: linear-gradient(180deg, var(--yellow), rgba(255,214,10,.2)); }
+    .us-green  { background: linear-gradient(180deg, var(--green),  rgba(48,209,88,.2)); }
+
+    .np-grid {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: var(--sp-12);
+      align-items: start;
+    }
+
+    @media (max-width: 768px) {
+      .np-grid { grid-template-columns: 1fr; }
+      .np-vitals-grid { grid-template-columns: repeat(2,1fr) !important; }
+    }
+
+    .np-avatar {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: rgba(10,132,255,.16);
+      border: 1px solid rgba(10,132,255,.32);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 15px; font-weight: 700;
+      color: var(--ta);
+      flex-shrink: 0;
+      backdrop-filter: blur(12px);
+    }
+
+    .np-name {
+      font-family: var(--font-serif);
+      font-size: 26px;
+      font-weight: 400;
+      letter-spacing: -.6px;
+      color: var(--t1);
+      margin-bottom: 3px;
+    }
+
+    .np-meta {
+      font-size: 12.5px;
+      color: var(--t2);
+      margin-bottom: var(--sp-8);
+    }
+
+    .np-vitals-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--sp-4);
+    }
+
+    .np-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--sp-6);
+      min-width: 140px;
+    }
+
+    /* ── QUEUE TABLE ── */
+    .queue-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .queue-table th {
+      padding: 10px 14px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .7px;
+      color: var(--t3);
+      font-family: var(--font-mono);
+      text-align: left;
+      border-bottom: 1px solid var(--tbl-bd);
+    }
+
+    .queue-table td {
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--tbl-bd);
+      vertical-align: middle;
+    }
+
+    .queue-table tr:last-child td { border-bottom: none; }
+
+    .qr-next td { background: rgba(10,132,255,.05); }
+    .qr-urgent td { background: var(--row-u); }
+    .qr-watchlist td { background: var(--row-w); }
+
+    .queue-table tr:hover td { background: var(--tbl-h); cursor: pointer; }
+    .qr-next:hover td { background: rgba(10,132,255,.08) !important; }
+
+    .pt-cell {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-8);
+    }
+
+    .pt-mini-av {
+      width: 32px; height: 32px;
+      font-size: 10.5px; font-weight: 700;
+    }
+
+    .q-name { font-size: 13.5px; font-weight: 500; color: var(--t1); }
+    .q-age  { font-size: 11px; color: var(--t3); display: block; margin-top: 1px; }
+    .q-dx   { font-size: 13px; color: var(--t1); }
+    .q-dx-sub { font-size: 11px; color: var(--t3); display: block; margin-top: 1px; }
+    .q-time { font-family: var(--font-mono); font-size: 12px; color: var(--t2); }
+    .q-type { font-size: 11.5px; color: var(--t2); display: block; }
+
+    /* ── DAILY STATS ── */
+    .day-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--sp-8);
+    }
+
+    .day-stat-card {
+      padding: var(--sp-12) var(--sp-8);
+      text-align: center;
+    }
+
+    .ds-num {
+      font-family: var(--font-serif);
+      font-size: 36px;
+      font-weight: 400;
+      letter-spacing: -1px;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .ds-label {
+      font-size: 10.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--t3);
+    }
+
+    /* ── ALERTS PANEL ── */
+    .alerts-panel { padding: var(--sp-12); }
+    .alerts-list { display: flex; flex-direction: column; gap: var(--sp-6); }
+
+    /* ── NOW INDICATOR ── */
+    .now-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .6px;
+      padding: 2px 8px;
+      border-radius: var(--r-pill);
+      background: rgba(10,132,255,.18);
+      border: 1px solid rgba(10,132,255,.40);
+      color: var(--ta);
+      text-transform: uppercase;
+      animation: nowPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes nowPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(10,132,255,.3); }
+      50%       { box-shadow: 0 0 0 6px rgba(10,132,255,0); }
+    }
+
+    .done-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: var(--r-pill);
+      background: rgba(48,209,88,.10);
+      border: 1px solid rgba(48,209,88,.25);
+      color: var(--green);
+    }
+
+    /* empty state */
+    .empty-queue {
+      text-align: center;
+      padding: var(--sp-24) var(--sp-16);
+      color: var(--t3);
+    }
+
+    .empty-queue .empty-icon { font-size: 40px; margin-bottom: var(--sp-8); }
+  </style>
+</head>
+<body>
+  <div class="noise"></div>
+  <div class="bg">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+    <div class="orb orb-4"></div>
+  </div>
+
+  <nav class="nav" id="main-nav"></nav>
+
+  <main class="page">
+
+    <!-- Header greeting -->
+    <div class="rise" style="margin-bottom:var(--sp-12)">
+      <div id="greeting-wrap">
+        <h1 class="h-serif" style="font-size:clamp(28px,4vw,42px);margin-bottom:4px" id="greeting-text"></h1>
+        <p style="font-size:14px;color:var(--t2)" id="greeting-sub"></p>
+      </div>
+    </div>
+
+    <!-- Alerts (if any critical) -->
+    <div id="alerts-section" style="display:none;margin-bottom:var(--sp-16)">
+      <div class="sec-title rise"><span>⚠️</span> Active Alerts <span class="sec-num">TODAY</span></div>
+      <div class="alerts-list" id="alerts-list"></div>
+    </div>
+
+    <!-- Next Patient Hero -->
+    <div class="sec-title rise"><span>▶</span> Up Next <span class="sec-num" id="next-patient-time"></span></div>
+    <div class="gc gh next-patient-hero mb-16 rise rise-1" id="next-patient-card">
+      <!-- Rendered by JS -->
+    </div>
+
+    <!-- Daily Overview -->
+    <div style="display:grid;grid-template-columns:1fr 280px;gap:var(--sp-12);margin-bottom:var(--sp-16)">
+
+      <!-- Full Queue -->
+      <div>
+        <div class="sec-title rise"><span>📋</span> Today's Queue <span class="sec-num" id="queue-count"></span></div>
+        <div class="gc rise rise-1" style="overflow:hidden;padding:0">
+          <table class="queue-table" id="queue-table">
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Diagnosis</th>
+                <th>Appointment</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="queue-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Right column: day stats + alerts -->
+      <div style="display:flex;flex-direction:column;gap:var(--sp-12)">
+
+        <!-- Day stats -->
+        <div>
+          <div class="sec-title" style="font-size:15px"><span>📊</span> Today</div>
+          <div class="day-stats">
+            <div class="gc day-stat-card gc-sm">
+              <div class="ds-num" id="stat-total" style="color:var(--ta)">—</div>
+              <div class="ds-label">Patients</div>
+            </div>
+            <div class="gc day-stat-card gc-sm">
+              <div class="ds-num" id="stat-urgent" style="color:var(--red)">—</div>
+              <div class="ds-label">Urgent</div>
+            </div>
+            <div class="gc day-stat-card gc-sm">
+              <div class="ds-num" id="stat-watch" style="color:var(--yellow)">—</div>
+              <div class="ds-label">Watch</div>
+            </div>
+            <div class="gc day-stat-card gc-sm">
+              <div class="ds-num" id="stat-stable" style="color:var(--green)">—</div>
+              <div class="ds-label">Stable</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Reminder notes -->
+        <div class="gc gc-sm p-12">
+          <div class="label mb-8">⚡ Quick Reminders</div>
+          <div class="flex flex-col gap-6" id="reminders-list"></div>
+        </div>
+
+        <!-- Sign out block -->
+        <div class="gc gc-sm p-12" style="text-align:center">
+          <div style="font-size:11px;color:var(--t3);margin-bottom:var(--sp-6)">Signed in as</div>
+          <div class="flex items-center gap-8" style="justify-content:center;margin-bottom:var(--sp-8)">
+            <div class="ga nav-av" id="doctor-chip" style="width:36px;height:36px;font-size:12px"></div>
+            <div>
+              <div style="font-size:13px;font-weight:500" id="doctor-name-chip"></div>
+              <div style="font-size:10.5px;color:var(--t3)" id="doctor-dept-chip"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="footer">
+    <div class="footer-in">
+      <div class="footer-brand">⚕ OncoClear</div>
+      <div class="footer-disc">For licensed clinical professionals only. Not for actual clinical use. All data is demonstration only.</div>
+      <div class="footer-links">
+        <a href="#" class="footer-link">Help</a>
+        <a href="#" class="footer-link">Privacy</a>
+        <a href="index.html" class="footer-link">Sign out</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+    /* ── AUTH ── */
+    const doctor = Session.requireAuth();
+    if (!doctor) throw new Error('Redirect');
+
+    /* ── NAV ── */
+    Nav.render(doctor, 'dashboard');
+
+    /* ── PATIENTS ── */
+    const patients = OC.getDoctorPatients(doctor.id);
+    const cfg = OC.specialtyConfig[doctor.specialty] || {};
+
+    /* ── GREETING ── */
+    const now = new Date();
+    const hour = now.getHours();
+    const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+    document.getElementById('greeting-text').innerHTML =
+      `${greet}, <span style="color:var(--ta)">${doctor.name.split(' ')[1]}</span>.`;
+    document.getElementById('greeting-sub').textContent =
+      `${patients.length} patients scheduled · ${cfg.icon} ${cfg.label} · ${now.toLocaleDateString('en-US', {weekday:'long',month:'long',day:'numeric'})}`;
+
+    /* ── DOCTOR CHIP ── */
+    document.getElementById('doctor-chip').textContent       = doctor.initials;
+    document.getElementById('doctor-name-chip').textContent  = doctor.name;
+    document.getElementById('doctor-dept-chip').textContent  = cfg.label;
+
+    /* ── STATS ── */
+    const urgent   = patients.filter(p => p.status === 'urgent').length;
+    const watchlist= patients.filter(p => p.status === 'watchlist').length;
+    const stable   = patients.filter(p => p.status === 'stable').length;
+    document.getElementById('stat-total').textContent  = patients.length;
+    document.getElementById('stat-urgent').textContent = urgent;
+    document.getElementById('stat-watch').textContent  = watchlist;
+    document.getElementById('stat-stable').textContent = stable;
+
+    /* ── ALERTS ── */
+    const criticals = [];
+    patients.forEach(p => {
+      p.alerts.filter(a => a.level === 'critical').forEach(a => {
+        criticals.push({ patient: p.name, text: a.text });
+      });
+    });
+
+    if (criticals.length > 0) {
+      document.getElementById('alerts-section').style.display = 'block';
+      document.getElementById('alerts-list').innerHTML = criticals.map(a => `
+        <div class="alert alert-critical">
+          <span class="alert-icon">🔴</span>
+          <div><strong style="font-size:13px">${a.patient}</strong> — ${a.text}</div>
+        </div>`).join('');
+    }
+
+    /* ── QUEUE COUNT ── */
+    document.getElementById('queue-count').textContent = `${patients.length} total`;
+
+    /* ── NEXT PATIENT HERO ── */
+    function renderNextPatient(p) {
+      const card = document.getElementById('next-patient-card');
+      const stripeCls = p.status === 'urgent' ? 'us-red' : p.status === 'watchlist' ? 'us-yellow' : 'us-green';
+      const vitalsHtml = Object.entries(p.tier1.vitals).slice(0,4).map(([k, v]) => {
+        const cls = v.status === 'critical' ? 'vv-crit' : v.status === 'warn' ? 'vv-warn' : 'vv-norm';
+        const tcls = v.trend === 'down' ? 'vt-down' : v.trend === 'up' ? (v.status === 'critical' ? 'vt-up-bad' : 'vt-good') : 'vt-stable';
+        return `<div class="vital-tile gt gc-xs">
+          <div class="vl">${k.toUpperCase().substring(0,6)}</div>
+          <div class="vv ${cls}">${v.value}<span class="vu"> ${v.unit}</span></div>
+          <div class="vtrend ${tcls}">${v.delta}</div>
+        </div>`;
+      }).join('');
+
+      card.innerHTML = `
+        <div class="urgency-stripe ${stripeCls}"></div>
+        <div class="np-grid">
+
+          <div class="flex flex-col gap-4" style="align-items:center">
+            <div class="np-avatar">${p.initials}</div>
+            <div class="now-chip"><span class="dot dot-blue" style="background:var(--ta)"></span>NOW</div>
+          </div>
+
+          <div>
+            <div class="np-name">${p.name}</div>
+            <div class="np-meta">${p.age}y ${p.sex} · MRN ${p.mrn} · ${p.appointmentType}</div>
+            <div class="flex gap-4 flex-wrap mb-8">
+              ${Render.statusPill(p.status, p.statusLabel)}
+              <span class="tag tag-orange">${p.stage}</span>
+              <span class="tag tag-blue">${p.currentTherapy.split(' ')[0]} · ${p.cycleInfo}</span>
+              ${p.urgencyReason ? `<span class="tag tag-red" style="font-size:10.5px">${p.urgencyReason}</span>` : ''}
+            </div>
+            <div class="np-vitals-grid">${vitalsHtml}</div>
+          </div>
+
+          <div class="np-actions">
+            <button class="btn btn-primary" id="open-next-patient" data-patient="${p.id}">
+              Open Chart <span class="arr">→</span>
+            </button>
+            <div style="font-size:10.5px;color:var(--t3);text-align:center;padding-top:4px">
+              ${p.appointmentTime} · ${p.diagnosisShort}
+            </div>
+            <div style="font-size:10.5px;color:var(--t2);text-align:center;line-height:1.4">${p.diagnosis}</div>
+          </div>
+        </div>`;
+
+      document.getElementById('next-patient-time').textContent = p.appointmentTime;
+
+      document.getElementById('open-next-patient').addEventListener('click', (e) => {
+        e.stopPropagation();
+        openPatient(p.id);
+      });
+      card.addEventListener('click', () => openPatient(p.id));
+    }
+
+    /* ── QUEUE TABLE ── */
+    function renderQueue(pts) {
+      const tbody = document.getElementById('queue-tbody');
+      tbody.innerHTML = pts.map((p, i) => {
+        const rowCls = i === 0 ? 'qr-next' : p.status === 'urgent' ? 'qr-urgent' : p.status === 'watchlist' ? 'qr-watchlist' : '';
+        const timeChip = i === 0
+          ? `<span class="now-chip"><span class="dot dot-blue" style="background:var(--ta);width:6px;height:6px"></span>NOW</span>`
+          : `<span class="done-chip">○ ${p.appointmentTime}</span>`;
+
+        return `<tr class="queue-row ${rowCls}" data-patient="${p.id}">
+          <td>
+            <div class="pt-cell">
+              <div class="ga pt-mini-av">${p.initials}</div>
+              <div>
+                <div class="q-name">${p.name}</div>
+                <span class="q-age">${p.age}y ${p.sex} · MRN ${p.mrn}</span>
+              </div>
+            </div>
+          </td>
+          <td>
+            <div class="q-dx">${p.diagnosisShort}</div>
+            <span class="q-dx-sub">${p.diagnosisSub.split('·')[0].trim()}</span>
+          </td>
+          <td>
+            ${timeChip}
+            <span class="q-type">${p.appointmentType.split('—')[0].trim()}</span>
+          </td>
+          <td>${Render.statusPill(p.status, p.statusLabel)}</td>
+          <td><button class="btn btn-ghost btn-sm">Open →</button></td>
+        </tr>`;
+      }).join('');
+
+      tbody.querySelectorAll('.queue-row').forEach(row => {
+        row.addEventListener('click', () => openPatient(row.dataset.patient));
+      });
+    }
+
+    /* ── REMINDERS ── */
+    function renderReminders(pts) {
+      const items = [];
+      pts.forEach(p => {
+        p.alerts.filter(a => a.level === 'info').slice(0,1).forEach(a => {
+          items.push({ name: p.name.split(' ')[1], text: a.text });
+        });
+      });
+      if (!items.length) items.push({ name: 'Queue', text: 'No pending reminders.' });
+      document.getElementById('reminders-list').innerHTML = items.slice(0,4).map(r => `
+        <div style="display:flex;gap:6px;font-size:11.5px;color:var(--t2);line-height:1.4">
+          <span style="color:var(--ta);flex-shrink:0;margin-top:2px">→</span>
+          <span><strong>${r.name}:</strong> ${r.text}</span>
+        </div>`).join('');
+    }
+
+    /* ── NAVIGATE TO PATIENT ── */
+    function openPatient(patientId) {
+      Session.setPatient(patientId);
+      window.location.href = 'patient.html';
+    }
+
+    /* ── MOUNT ── */
+    if (patients.length > 0) {
+      renderNextPatient(patients[0]);
+      renderQueue(patients);
+      renderReminders(patients);
+    } else {
+      document.getElementById('next-patient-card').innerHTML = `
+        <div class="empty-queue">
+          <div class="empty-icon">🎉</div>
+          <div style="font-size:16px;font-weight:500;color:var(--t1);margin-bottom:6px">All caught up!</div>
+          <div>No patients scheduled for today.</div>
+        </div>`;
+    }
+
+    Motion.initAll();
+  </script>
+</body>
+</html>
