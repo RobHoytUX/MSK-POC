@@ -41,7 +41,7 @@ const cards = [
   },
 ];
 
-export default function DashboardPage({ selectedPatient, onChangePatient, onOpenPatientChart, headerActions, onAskAI }: DashboardPageProps) {
+export default function DashboardPage({ selectedPatient, onOpenPatientChart, headerActions, onAskAI }: DashboardPageProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const activeAlerts = selectedPatient
     ? [
