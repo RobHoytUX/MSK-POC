@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays, Bell, Sun, Moon, SlidersHorizontal, Layers3, Stethoscope, Microscope } from "lucide-react";
+import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays, Bell, SlidersHorizontal, Layers3, Stethoscope, Microscope } from "lucide-react";
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -387,8 +387,6 @@ const filterEventsByRange = (events: TimelineEvent[], startMonth: number, endMon
 interface DashboardProps {
   selectedPatient?: Patient;
   onChangePatient?: () => void;
-  isDark: boolean;
-  onToggleTheme: () => void;
 }
 
 type ActiveView = "dashboard" | "patientChart" | "timeline" | "trials" | "research" | "ai";
@@ -397,7 +395,7 @@ type FeatureScope = "all" | "clinical" | "research";
 const getDefaultViewForScope = (scope: FeatureScope): ActiveView =>
   scope === "research" ? "trials" : "timeline";
 
-export default function CancerTreatmentDashboard({ selectedPatient, onChangePatient, isDark, onToggleTheme }: DashboardProps) {
+export default function CancerTreatmentDashboard({ selectedPatient, onChangePatient }: DashboardProps) {
   const { profile, user } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -567,13 +565,6 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
 
   const renderHeaderActions = () => (
     <>
-      <button
-        onClick={onToggleTheme}
-        className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-        title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      >
-        {isDark ? <Sun className="w-5 h-5 text-gray-600" /> : <Moon className="w-5 h-5 text-gray-600" />}
-      </button>
       <button
         onClick={() => setIsNotificationsOpen(true)}
         className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
@@ -784,8 +775,6 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
             onClose={() => setShowKeywordsTree(false)}
             pendingPostId={pendingPostId}
             onPendingPostHandled={() => setPendingPostId(null)}
-            isDark={isDark}
-            onToggleTheme={onToggleTheme}
           />
         ) : activeView === "dashboard" ? (
           <DashboardPage
@@ -846,13 +835,6 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
                         </button>
                       )}
                     </div>
-                    <button
-                      onClick={onToggleTheme}
-                      className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-                    >
-                      {isDark ? <Sun className="w-5 h-5 text-gray-600" /> : <Moon className="w-5 h-5 text-gray-600" />}
-                    </button>
                     <button
                       onClick={() => setIsNotificationsOpen(true)}
                       className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
@@ -1447,13 +1429,6 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
           <div className="relative h-full">
             <AIPage onClose={() => setActiveView(getDefaultViewForScope(featureScope))} />
             <div className="absolute top-5 right-8 flex items-center gap-3 z-10">
-              <button
-                onClick={onToggleTheme}
-                className="p-2 bg-white hover:bg-gray-100 rounded-full transition-colors shadow-sm border border-gray-200"
-                title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-              >
-                {isDark ? <Sun className="w-5 h-5 text-gray-600" /> : <Moon className="w-5 h-5 text-gray-600" />}
-              </button>
               <button
                 onClick={() => setIsNotificationsOpen(true)}
                 className="p-2 bg-white hover:bg-gray-100 rounded-full transition-colors shadow-sm border border-gray-200"

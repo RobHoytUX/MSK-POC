@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AuthProvider, useAuth } from "./lib/AuthContext";
 import CancerTreatmentDashboard from "./components/CancerTreatmentDashboard";
 import AuthPage from "./components/AuthPage";
@@ -8,14 +8,6 @@ import { Patient } from "./lib/patients";
 function AppContent() {
   const { user, loading } = useAuth();
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [isDark, setIsDark] = useState<boolean>(() => {
-    const saved = localStorage.getItem("maps-theme");
-    return saved ? saved === "dark" : true;
-  });
-
-  useEffect(() => {
-    localStorage.setItem("maps-theme", isDark ? "dark" : "light");
-  }, [isDark]);
 
   if (loading) {
     return (
@@ -34,23 +26,17 @@ function AppContent() {
 
   if (!selectedPatient) {
     return (
-      <div className={`${isDark ? "app-dark" : "app-light"} min-h-screen`}>
-        <PatientSelectPage
-          onSelectPatient={setSelectedPatient}
-          isDark={isDark}
-          onToggleTheme={() => setIsDark((prev) => !prev)}
-        />
+      <div className="app-light min-h-screen">
+        <PatientSelectPage onSelectPatient={setSelectedPatient} />
       </div>
     );
   }
 
   return (
-    <div className={`${isDark ? "app-dark" : "app-light"} size-full`}>
+    <div className="app-light size-full">
       <CancerTreatmentDashboard
         selectedPatient={selectedPatient}
         onChangePatient={() => setSelectedPatient(null)}
-        isDark={isDark}
-        onToggleTheme={() => setIsDark((prev) => !prev)}
       />
     </div>
   );

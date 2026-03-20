@@ -1,17 +1,15 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { Search, X, Calendar, Clock, Pill, Stethoscope, Phone, Mail, MapPin, ChevronRight, Users, LogOut, Moon, Sun } from 'lucide-react';
+import { Search, X, Calendar, Clock, Pill, Stethoscope, Phone, Mail, MapPin, ChevronRight, Users, LogOut } from 'lucide-react';
 import { patients, Patient } from '../lib/patients';
 import { useAuth } from '../lib/AuthContext';
 import mapsLogo from '../src/assets/maps-logo.png';
 
 interface PatientSelectPageProps {
   onSelectPatient: (patient: Patient) => void;
-  isDark: boolean;
-  onToggleTheme: () => void;
 }
 
-export default function PatientSelectPage({ onSelectPatient, isDark, onToggleTheme }: PatientSelectPageProps) {
+export default function PatientSelectPage({ onSelectPatient }: PatientSelectPageProps) {
   const { profile, signOut } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedPatient, setExpandedPatient] = useState<string | null>(null);
@@ -53,13 +51,6 @@ export default function PatientSelectPage({ onSelectPatient, isDark, onToggleThe
                 <span className="text-sm text-gray-600">{filtered.length} patients</span>
               </div>
               <div className="flex items-center gap-3">
-                <button
-                  onClick={onToggleTheme}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
-                  title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-                >
-                  {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                </button>
                 <div className="text-right">
                   <p className="text-sm font-medium text-gray-900">{profile?.full_name}</p>
                   <p className="text-xs text-gray-500">{profile?.specialty || 'Physician'}</p>
