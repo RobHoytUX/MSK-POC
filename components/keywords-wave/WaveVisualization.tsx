@@ -1,10 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback, type MutableRefObject } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ShareModal } from './ShareModal';
 import { SaveModal } from './SaveModal';
 import { QuantumPanel } from './QuantumPanel';
-import { DoctorFeed } from './DoctorFeed';
-import { ArticleReader } from './ArticleReader';
 import { PostToFeedModal } from './PostToFeedModal';
 import { DoctorConnectionBanner } from './DoctorConnectionBanner';
 import { ClinicalNotesModal } from './ClinicalNotesModal';
@@ -21,10 +19,29 @@ interface Column {
   nodes: Node[];
 }
 
+export type DoctorFeedCanvasBridge = {
+  handleConnectionClick: (
+    connection: { title: string; description?: string },
+    doctorInfo?: { name: string; avatar: string; specialty: string; doctorId: number; postId: number }
+  ) => void;
+};
+
+/** Queued from Doctor Network when Keywords isn’t mounted; `id` dedupes Strict Mode double-apply. */
+export type PendingDoctorFeedConnection = {
+  id: number;
+  connection: { title: string; description?: string };
+  doctorInfo?: { name: string; avatar: string; specialty: string; doctorId: number; postId: number };
+};
+
 interface WaveVisualizationProps {
-  pendingPostId?: string | null;
-  onPendingPostHandled?: () => void;
   onFocusedNodeChange?: (isFocused: boolean) => void;
+  doctorFeedBridgeRef?: MutableRefObject<DoctorFeedCanvasBridge | null>;
+  onDoctorFeedClose?: () => void;
+  onDoctorFeedOpenFromCanvas?: (payload: { focusedDoctorId: number; focusedPostId: number }) => void;
+  onDoctorFeedPostsChanged?: () => void;
+  /** When set (e.g. after navigating from Doctor Network), applied once then cleared via onConsume. */
+  pendingDoctorFeedConnection?: PendingDoctorFeedConnection | null;
+  onConsumePendingDoctorFeedConnection?: () => void;
 }
 
 const medicalData: Column[] = [
@@ -104,7 +121,15 @@ const medicalData: Column[] = [
   },
 ];
 
-export function WaveVisualization({ pendingPostId, onPendingPostHandled, onFocusedNodeChange }: WaveVisualizationProps) {
+export function WaveVisualization({
+  onFocusedNodeChange,
+  doctorFeedBridgeRef,
+  onDoctorFeedClose,
+  onDoctorFeedOpenFromCanvas,
+  onDoctorFeedPostsChanged,
+  pendingDoctorFeedConnection,
+  onConsumePendingDoctorFeedConnection,
+}: WaveVisualizationProps) {
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set());
   const [focusedNode, setFocusedNode] = useState<string | null>(null);
@@ -118,16 +143,9 @@ export function WaveVisualization({ pendingPostId, onPendingPostHandled, onFocus
   const [isRecording, setIsRecording] = useState(false);
   const [showVoicePopup, setShowVoicePopup] = useState(false);
   const [showQuantumPanel, setShowQuantumPanel] = useState(false);
-  const [doctorFeedOpen, setDoctorFeedOpen] = useState(false);
-  const [articleReaderOpen, setArticleReaderOpen] = useState(false);
   const [postToFeedModalOpen, setPostToFeedModalOpen] = useState(false);
-  const [feedRefreshTrigger, setFeedRefreshTrigger] = useState(0);
-  const [notificationPostId, setNotificationPostId] = useState<string | null>(null);
-  const [currentArticle, setCurrentArticle] = useState<{ title: string; description?: string; author?: string } | null>(null);
   const [savedCanvasState, setSavedCanvasState] = useState<{ focusedNode: string | null; selectedNodes: Set<string> } | null>(null);
   const [doctorConnectionInfo, setDoctorConnectionInfo] = useState<{ name: string; avatar: string; specialty: string; postTitle: string; doctorId: number; postId: number } | null>(null);
-  const [feedFocusedDoctorId, setFeedFocusedDoctorId] = useState<number | null>(null);
-  const [feedFocusedPostId, setFeedFocusedPostId] = useState<number | null>(null);
   const [clinicalNotesModalOpen, setClinicalNotesModalOpen] = useState(false);
   const [notesTarget, setNotesTarget] = useState<{ type: 'node' | 'connection'; id: string; title: string } | null>(null);
   const [nodeNotes, setNodeNotes] = useState<Record<string, string>>({});
@@ -169,16 +187,6 @@ export function WaveVisualization({ pendingPostId, onPendingPostHandled, onFocus
   ]);
   const [svgWidth, setSvgWidth] = useState(1200);
   const svgRef = useRef<SVGSVGElement>(null);
-
-  // Handle pending notification post navigation
-  useEffect(() => {
-    if (pendingPostId) {
-      setNotificationPostId(pendingPostId);
-      setDoctorFeedOpen(true);
-      setFeedRefreshTrigger(prev => prev + 1);
-      onPendingPostHandled?.();
-    }
-  }, [pendingPostId]);
 
   // Update SVG width on mount and resize
   useEffect(() => {
@@ -240,9 +248,13 @@ export function WaveVisualization({ pendingPostId, onPendingPostHandled, onFocus
     }
   };
 
+  /** Connected Elements / Related Elements in the side panel — refocus the canvas on that node (same as clicking it on the graph). */
   const handleConnectedNodeClick = (nodeId: string) => {
-    setDetailView('node');
-    setDetailNodeId(nodeId);
+    setFocusedNode(nodeId);
+    setSelectedNodes(new Set([nodeId]));
+    setDetailView('connection');
+    setDetailNodeId(null);
+    onFocusedNodeChange?.(true);
   };
 
   const handleNodeRightClick = (e: React.MouseEvent, nodeId: string, nodeLabel: string) => {
@@ -301,45 +313,73 @@ export function WaveVisualization({ pendingPostId, onPendingPostHandled, onFocus
     }
   };
 
-  const handleArticleClick = (article: { title: string; description?: string; author?: string }) => {
-    setCurrentArticle(article);
-    setArticleReaderOpen(true);
-  };
-
-  const handleConnectionClick = (connection: { title: string; description?: string }, doctorInfo?: { name: string; avatar: string; specialty: string; doctorId: number; postId: number }) => {
-    setDoctorFeedOpen(false);
-    setSavedCanvasState({
-      focusedNode,
-      selectedNodes: new Set(selectedNodes)
-    });
-
-    const mockConnectionNodeIds = ['mon-2', 'mon-1', 'treat-3'];
-    
-    setFocusedNode(mockConnectionNodeIds[0]);
-    setSelectedNodes(new Set(mockConnectionNodeIds));
-    
-    if (doctorInfo) {
-      setDoctorConnectionInfo({
-        ...doctorInfo,
-        postTitle: connection.title
+  const handleConnectionClick = useCallback(
+    (
+      connection: { title: string; description?: string },
+      doctorInfo?: { name: string; avatar: string; specialty: string; doctorId: number; postId: number }
+    ) => {
+      onDoctorFeedClose?.();
+      setSavedCanvasState({
+        focusedNode,
+        selectedNodes: new Set(selectedNodes),
       });
-    }
-    
-    toast.success('Loaded connection pattern from doctor', {
-      description: connection.title,
-      duration: 3000,
-      action: {
-        label: 'Clear',
-        onClick: () => handleClear()
+
+      const mockConnectionNodeIds = ['mon-2', 'mon-1', 'treat-3'];
+
+      setFocusedNode(mockConnectionNodeIds[0]);
+      setSelectedNodes(new Set(mockConnectionNodeIds));
+      onFocusedNodeChange?.(true);
+
+      if (doctorInfo) {
+        setDoctorConnectionInfo({
+          ...doctorInfo,
+          postTitle: connection.title,
+        });
       }
-    });
-  };
+
+      toast.success('Loaded connection pattern from doctor', {
+        description: connection.title,
+        duration: 3000,
+        action: {
+          label: 'Clear',
+          onClick: () => handleClear(),
+        },
+      });
+    },
+    [focusedNode, selectedNodes, onDoctorFeedClose, onFocusedNodeChange, handleClear]
+  );
+
+  if (doctorFeedBridgeRef) {
+    doctorFeedBridgeRef.current = { handleConnectionClick };
+  }
+
+  useEffect(() => {
+    return () => {
+      if (doctorFeedBridgeRef) {
+        doctorFeedBridgeRef.current = null;
+      }
+    };
+  }, [doctorFeedBridgeRef]);
+
+  const appliedPendingFeedIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!pendingDoctorFeedConnection) {
+      appliedPendingFeedIdRef.current = null;
+      return;
+    }
+    const { id, connection, doctorInfo } = pendingDoctorFeedConnection;
+    if (appliedPendingFeedIdRef.current === id) return;
+    appliedPendingFeedIdRef.current = id;
+    handleConnectionClick(connection, doctorInfo);
+    onConsumePendingDoctorFeedConnection?.();
+  }, [pendingDoctorFeedConnection, handleConnectionClick, onConsumePendingDoctorFeedConnection]);
 
   const handleDoctorNameClick = () => {
     if (doctorConnectionInfo) {
-      setFeedFocusedDoctorId(doctorConnectionInfo.doctorId);
-      setFeedFocusedPostId(doctorConnectionInfo.postId);
-      setDoctorFeedOpen(true);
+      onDoctorFeedOpenFromCanvas?.({
+        focusedDoctorId: doctorConnectionInfo.doctorId,
+        focusedPostId: doctorConnectionInfo.postId,
+      });
     }
   };
 
@@ -621,7 +661,7 @@ export function WaveVisualization({ pendingPostId, onPendingPostHandled, onFocus
     <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 overflow-auto relative">
       <div className="min-w-[1200px] h-full relative flex">
         {/* Main Content Area */}
-        <div className={`flex-1 transition-all duration-500 ${focusedNode ? 'mr-[440px]' : ''}`}>
+        <div className={`flex-1 transition-all duration-150 ${focusedNode ? 'mr-[440px]' : ''}`}>
 
         {/* Visualization */}
         <div className="p-8">
@@ -693,19 +733,6 @@ export function WaveVisualization({ pendingPostId, onPendingPostHandled, onFocus
                     )}
                   </div>
                 </button>
-                
-                <button
-                  onClick={() => setDoctorFeedOpen(!doctorFeedOpen)}
-                  className="p-2.5 bg-white hover:bg-gray-50 rounded-lg shadow-md border border-gray-200 transition-all group"
-                  title="Doctor Network"
-                >
-                  <div className="relative">
-                    <svg className="w-5 h-5 text-gray-600 group-hover:text-blue-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full border-2 border-white"></span>
-                  </div>
-                </button>
                 </div> {/* end icon group */}
               </div>
             )}
@@ -720,7 +747,7 @@ export function WaveVisualization({ pendingPostId, onPendingPostHandled, onFocus
                     initial={{ width: 0, opacity: 0 }}
                     animate={{ width: 320, opacity: 1 }}
                     exit={{ width: 0, opacity: 0 }}
-                    transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                    transition={{ type: "spring", damping: 30, stiffness: 400 }}
                     className="flex-shrink-0 bg-white border-r border-gray-200 overflow-hidden relative"
                   >
                   <div className="px-4 py-4 border-b border-gray-200 bg-gradient-to-r from-cyan-50 to-blue-50">
@@ -952,9 +979,9 @@ export function WaveVisualization({ pendingPostId, onPendingPostHandled, onFocus
                           if (!isVisible) return null;
 
                           const totalNodes = medicalData.reduce((sum, col) => sum + col.nodes.length, 0);
-                          const nodeAnimationDuration = 0.3;
-                          const nodeStaggerDelay = 0.03;
-                          const allNodesAppearTime = (totalNodes - 1) * nodeStaggerDelay + nodeAnimationDuration + 0.15;
+                          const nodeAnimationDuration = 0.12;
+                          const nodeStaggerDelay = 0.01;
+                          const allNodesAppearTime = (totalNodes - 1) * nodeStaggerDelay + nodeAnimationDuration + 0.02;
 
                           const connectionId = `${node.id}-${targetId}`;
                           const hasNotes = connectionNotes[connectionId];
@@ -973,8 +1000,8 @@ export function WaveVisualization({ pendingPostId, onPendingPostHandled, onFocus
                                 fill="none"
                                 initial={{ pathLength: 0, opacity: 0 }}
                                 animate={{ pathLength: 1, opacity: isActive ? 0.8 : (hasNotes ? 0.5 : 0.3) }}
-                                transition={{ duration: 0.5, delay: allNodesAppearTime }}
-                                className="transition-all duration-200 cursor-pointer"
+                                transition={{ duration: 0.12, delay: allNodesAppearTime }}
+                                className="transition-all duration-75 cursor-pointer"
                                 style={{ pointerEvents: 'stroke' }}
                                 onContextMenu={(e) => handleConnectionRightClick(e, node.id, targetId)}
                               />
@@ -1017,13 +1044,13 @@ export function WaveVisualization({ pendingPostId, onPendingPostHandled, onFocus
                           
                           const prevNodesCount = medicalData.slice(0, columnIndex).reduce((sum, col) => sum + col.nodes.length, 0);
                           const globalNodeIndex = prevNodesCount + nodeIndex;
-                          const nodeStaggerDelay = 0.03;
-                          const nodeAnimationDuration = 0.3;
+                          const nodeStaggerDelay = 0.01;
+                          const nodeAnimationDuration = 0.12;
 
                           return (
                             <motion.g
                               key={node.id}
-                              initial={{ opacity: 0, y: -10 }}
+                              initial={{ opacity: 0, y: -5 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ duration: nodeAnimationDuration, delay: globalNodeIndex * nodeStaggerDelay }}
                               onMouseEnter={() => handleNodeHover(node.id)}
@@ -1114,9 +1141,9 @@ export function WaveVisualization({ pendingPostId, onPendingPostHandled, onFocus
                       const visibleNodes = getVisibleNodesInFocus();
                       const sortedNodes = [...visibleNodes].sort((a, b) => a.columnIndex - b.columnIndex);
                       const focusedIndex = sortedNodes.findIndex(node => node.id === focusedNode);
-                      const nodeAnimationDuration = 0.5;
-                      const nodeStaggerDelay = 0.1;
-                      const panelAnimationDelay = commentPanelOpen ? 0.5 : 0;
+                      const nodeAnimationDuration = 0.12;
+                      const nodeStaggerDelay = 0.03;
+                      const panelAnimationDelay = 0;
                       const allNodesAppearTime = panelAnimationDelay + (sortedNodes.length - 1) * nodeStaggerDelay + nodeAnimationDuration;
                       
                       return (
@@ -1145,7 +1172,7 @@ export function WaveVisualization({ pendingPostId, onPendingPostHandled, onFocus
                                 initial={{ pathLength: 0, opacity: 0 }}
                                 animate={{ pathLength: 1, opacity: 0.7 }}
                                 exit={{ pathLength: 0, opacity: 0 }}
-                                transition={{ duration: 0.6, delay: allNodesAppearTime + 0.3 + index * 0.05 }}
+                                transition={{ duration: 0.1, delay: allNodesAppearTime + index * 0.02 }}
                                 className="cursor-pointer"
                                 style={{ pointerEvents: 'stroke' }}
                                 onContextMenu={(e) => handleConnectionRightClick(e, focusedNode || '', node.id)}
@@ -1164,10 +1191,11 @@ export function WaveVisualization({ pendingPostId, onPendingPostHandled, onFocus
                                 animate={{ scale: 1, opacity: 1, x: pos.x - columnWidth / 2, y: pos.y - nodeHeight / 2 }}
                                 exit={{ scale: 0, opacity: 0 }}
                                 transition={{ 
-                                  duration: 0.5, 
-                                  delay: panelAnimationDelay + index * 0.1,
+                                  duration: 0.12, 
+                                  delay: index * 0.03,
                                   type: "spring",
-                                  stiffness: 100
+                                  stiffness: 400,
+                                  damping: 30,
                                 }}
                                 className="cursor-pointer"
                                 onClick={() => visNode.isFocused ? handleNodeClick(visNode.id) : handleConnectedNodeClick(visNode.id)}
@@ -1259,7 +1287,7 @@ export function WaveVisualization({ pendingPostId, onPendingPostHandled, onFocus
                 initial={{ x: 440 }}
                 animate={{ x: 0 }}
                 exit={{ x: 440 }}
-                transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                transition={{ type: "spring", damping: 30, stiffness: 400 }}
                 className="fixed top-0 right-0 w-[440px] h-screen bg-white shadow-2xl border-l border-gray-200 overflow-hidden z-50"
               >
                 <div className="px-6 py-6 border-b border-gray-200">
@@ -1495,33 +1523,11 @@ export function WaveVisualization({ pendingPostId, onPendingPostHandled, onFocus
         )}
       </AnimatePresence>
 
-      <DoctorFeed 
-        isOpen={doctorFeedOpen}
-        onClose={() => {
-          setDoctorFeedOpen(false);
-          setFeedFocusedDoctorId(null);
-          setFeedFocusedPostId(null);
-          setNotificationPostId(null);
-        }}
-        onArticleClick={handleArticleClick}
-        onConnectionClick={handleConnectionClick}
-        focusedDoctorId={feedFocusedDoctorId}
-        focusedPostId={feedFocusedPostId}
-        refreshTrigger={feedRefreshTrigger}
-        highlightSupabasePostId={notificationPostId}
-      />
-
-      <ArticleReader
-        isOpen={articleReaderOpen}
-        onClose={() => setArticleReaderOpen(false)}
-        article={currentArticle}
-      />
-
       <PostToFeedModal
         isOpen={postToFeedModalOpen}
         onClose={() => setPostToFeedModalOpen(false)}
         connectionTitle={focusedNode ? medicalData.flatMap(col => col.nodes).find(n => n.id === focusedNode)?.label : undefined}
-        onPostCreated={() => setFeedRefreshTrigger(prev => prev + 1)}
+        onPostCreated={() => onDoctorFeedPostsChanged?.()}
       />
 
       <ClinicalNotesModal

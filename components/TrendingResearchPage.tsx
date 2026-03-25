@@ -1,5 +1,5 @@
 import { ReactNode, useState } from "react";
-import { Search, X, ExternalLink, TrendingUp, Users, FileText, Hash, Sparkles } from "lucide-react";
+import { Search, X, ExternalLink, TrendingUp, Users, FileText, Hash, Sparkles, UserRound } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
 interface ResearchArticle {
@@ -325,17 +325,6 @@ const getCategoryColor = (category: string) => {
   return colors[category as keyof typeof colors] || colors["Biomarkers"];
 };
 
-const getCategoryColorSelected = (category: string) => {
-  const colors = {
-    "Immunotherapy": "bg-indigo-600 text-white border-indigo-600",
-    "Targeted Therapy": "bg-purple-600 text-white border-purple-600",
-    "Surgical Advances": "bg-emerald-600 text-white border-emerald-600",
-    "Biomarkers": "bg-blue-600 text-white border-blue-600",
-    "Survivorship": "bg-amber-600 text-white border-amber-600",
-    "Prevention": "bg-rose-600 text-white border-rose-600"
-  };
-  return colors[category as keyof typeof colors] || colors["Biomarkers"];
-};
 
 const getKeywordColor = (color: string) => {
   const colors = {
@@ -358,9 +347,12 @@ const getTrendingBadgeColor = (score: number) => {
 interface TrendingResearchPageProps {
   onClose: () => void;
   headerActions?: ReactNode;
+  tabRowActions?: ReactNode;
+  selectedPatient?: { name: string; age: number; gender: string; diagnoses: string[]; mrn: string };
+  onChangePatient?: () => void;
 }
 
-export default function TrendingResearchPage({ headerActions }: TrendingResearchPageProps) {
+export default function TrendingResearchPage({ headerActions, tabRowActions, selectedPatient, onChangePatient }: TrendingResearchPageProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedArticle, setSelectedArticle] = useState<ResearchArticle | null>(null);
   const [isPanelVisible, setIsPanelVisible] = useState(false);
@@ -400,8 +392,26 @@ export default function TrendingResearchPage({ headerActions }: TrendingResearch
           <div className="px-8 py-6">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h1 className="text-gray-900 mb-1">Trending Research</h1>
-                <p className="text-gray-500">Latest breakthrough studies relevant to your diagnosis and treatment</p>
+                <h1 className="text-[27px] font-medium text-gray-900 mb-1">Trending Research</h1>
+                {selectedPatient ? (
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-gray-500 text-base mt-1">
+                    {onChangePatient && (
+                      <button
+                        type="button"
+                        onClick={onChangePatient}
+                        className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-medium border border-indigo-200 transition-colors mr-1"
+                      >
+                        <UserRound className="w-3.5 h-3.5" />
+                        Change Patient
+                      </button>
+                    )}
+                    <span className="text-gray-900 font-medium">{selectedPatient.name}</span>
+                    <span className="text-gray-300" aria-hidden>·</span>
+                    <span>{selectedPatient.age}yo {selectedPatient.gender} · {selectedPatient.diagnoses[0]} · {selectedPatient.mrn}</span>
+                  </div>
+                ) : (
+                  <p className="text-gray-500">Latest breakthrough studies relevant to your diagnosis and treatment</p>
+                )}
               </div>
               <div className="flex items-center gap-3">
                 <div className="relative w-96">
@@ -426,37 +436,40 @@ export default function TrendingResearchPage({ headerActions }: TrendingResearch
               </div>
             </div>
             
-            {/* Category Filters */}
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setFilterCategory(null)}
-                className={`px-3 py-1.5 rounded-full text-xs border transition-all ${
-                  !filterCategory 
-                    ? "bg-indigo-600 text-white border-indigo-600" 
-                    : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
-                }`}
-              >
-                All Categories
-              </button>
-              {categories.map((category) => (
+            {/* Row 2: category filters left, action buttons right — mirrors Discovery tabs row */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-wrap gap-1">
                 <button
-                  key={category}
-                  onClick={() => setFilterCategory(category)}
-                  className={`px-3 py-1.5 rounded-full text-xs border transition-all ${
-                    filterCategory === category
-                      ? getCategoryColorSelected(category)
-                      : getCategoryColor(category) + " hover:opacity-80"
+                  onClick={() => setFilterCategory(null)}
+                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                    !filterCategory
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200"
                   }`}
                 >
-                  {category}
+                  All Categories
                 </button>
-              ))}
+                {categories.map((category) => (
+                  <button
+                    key={category}
+                    onClick={() => setFilterCategory(category)}
+                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                      filterCategory === category
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+                    }`}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+              {tabRowActions && <div className="flex items-center gap-2 ml-4 shrink-0">{tabRowActions}</div>}
             </div>
           </div>
         </div>
 
         {/* Results Summary */}
-        <div className="px-8 py-4 bg-gray-50 border-b border-gray-200">
+        <div className="px-8 py-4 bg-gray-50 border-b border-gray-200 -mt-4">
           <p className="text-gray-600 text-sm">
             Showing <span className="font-semibold text-gray-900">{filteredArticles.length}</span> trending research article{filteredArticles.length !== 1 ? 's' : ''}
             {searchQuery && <span> matching "{searchQuery}"</span>}

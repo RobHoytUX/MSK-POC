@@ -737,17 +737,17 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-20"
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[45]"
             onClick={onClose}
           />
           
-          {/* Panel */}
+          {/* Panel — above Discovery header; aligned with Connection Analysis panel (z-50) */}
           <motion.div
             initial={{ x: -500, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: -500, opacity: 0 }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed top-0 left-0 w-[500px] h-full bg-white shadow-2xl border-r border-gray-200 overflow-hidden z-30"
+            className="fixed top-0 left-0 w-[500px] h-full bg-white shadow-2xl border-r border-gray-200 overflow-hidden z-50"
           >
             {/* Header */}
             <div className="px-4 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">

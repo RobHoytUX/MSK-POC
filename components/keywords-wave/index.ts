@@ -1,4 +1,5 @@
 export { WaveVisualization } from './WaveVisualization';
+export type { DoctorFeedCanvasBridge, PendingDoctorFeedConnection } from './WaveVisualization';
 export { ShareModal } from './ShareModal';
 export { SaveModal } from './SaveModal';
 export { QuantumPanel } from './QuantumPanel';

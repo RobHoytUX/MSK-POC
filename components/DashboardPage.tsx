@@ -3,7 +3,7 @@ import myChartLogo from "../src/assets/mychart-logo.png";
 import { Patient } from "../lib/patients";
 import { getQualifiedTrialIds } from "../lib/trialQualification";
 import { clinicalTrialsData } from "./ClinicalTrialsPage";
-import { CalendarCheck2, FlaskConical, Pill, AlertTriangle, Clock, Search, X, FileText, Sparkles } from "lucide-react";
+import { CalendarCheck2, FlaskConical, Pill, AlertTriangle, Clock, Search, X, FileText, Sparkles, UserRound, Newspaper } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import PatientChartPage from "./PatientChartPage";
 
@@ -15,6 +15,7 @@ interface DashboardPageProps {
   onAskAI?: () => void;
   /** Opens Clinical Trials; defaults to the Qualified tab unless `listTab` is `"all"`. */
   onOpenClinicalTrials?: (opts?: { trialId?: string; listTab?: "all" | "qualified" }) => void;
+  onOpenNewsFeed?: () => void;
 }
 
 const cards = [
@@ -49,9 +50,11 @@ const cards = [
 
 export default function DashboardPage({
   selectedPatient,
+  onChangePatient,
   headerActions,
   onAskAI,
   onOpenClinicalTrials,
+  onOpenNewsFeed,
 }: DashboardPageProps) {
   const { profile, user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
@@ -97,14 +100,33 @@ export default function DashboardPage({
   );
 
   return (
-    <div className="h-full bg-white overflow-auto">
-      <div className="bg-white">
+    <div className="h-full flex flex-col bg-white">
+      {/* Fixed header */}
+      <div className="bg-white shadow-sm shrink-0">
         <div className="px-8 py-6">
           {/* Row 1: title + search + header icons — mirrors Timeline row 1 */}
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-[27px] font-medium text-gray-900 mb-1">Action Board</h1>
-              <p className="text-gray-500">Welcome, {welcomeName}!</p>
+              <h1 className="text-[27px] font-medium text-gray-900 mb-1">Welcome, {welcomeName}!</h1>
+              {selectedPatient ? (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-gray-500 text-base mt-1">
+                  {onChangePatient && (
+                    <button
+                      type="button"
+                      onClick={onChangePatient}
+                      className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-medium border border-indigo-200 transition-colors mr-1"
+                    >
+                      <UserRound className="w-3.5 h-3.5" />
+                      Change Patient
+                    </button>
+                  )}
+                  <span className="text-gray-900 font-medium">{selectedPatient.name}</span>
+                  <span className="text-gray-300" aria-hidden>·</span>
+                  <span>{selectedPatient.age}yo {selectedPatient.gender} · {selectedPatient.diagnoses[0]} · {selectedPatient.mrn}</span>
+                </div>
+              ) : (
+                <p className="text-gray-500 mt-1">Action Board</p>
+              )}
             </div>
             <div className="flex items-center gap-4">
               <div className="relative w-96">
@@ -129,9 +151,10 @@ export default function DashboardPage({
             </div>
           </div>
 
-          {/* Row 2: action buttons right — mirrors Timeline row 2 */}
-          <div className="flex items-center justify-end gap-4">
-            <div className="flex items-center gap-3">
+          {/* Row 2: action buttons right — same structure as Discovery tabs row */}
+          <div className="flex items-center justify-between mb-4">
+            <div />
+            <div className="flex items-center gap-2">
               <button
                 onClick={openChart}
                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
@@ -139,6 +162,15 @@ export default function DashboardPage({
                 <FileText className="w-4 h-4" />
                 Open Chart
               </button>
+              {onOpenNewsFeed && (
+                <button
+                  onClick={onOpenNewsFeed}
+                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-full transition-colors"
+                >
+                  <Newspaper className="w-4 h-4" />
+                  News Feed
+                </button>
+              )}
               <button
                 onClick={onAskAI}
                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
@@ -151,7 +183,9 @@ export default function DashboardPage({
         </div>
       </div>
 
-      <div className="px-8 py-4 -mt-6 flex flex-col items-center">
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto">
+      <div className="px-8 pt-10 pb-4 flex flex-col items-center">
         <div className="w-full max-w-5xl -mt-4">
 
         {/* Up Next — patient summary card only */}
@@ -325,6 +359,7 @@ export default function DashboardPage({
 
         </div> {/* end max-w-5xl wrapper */}
       </div>
+      </div> {/* end scrollable content */}
 
       {/* Patient Chart Side Panel */}
       {isChartOpen && (

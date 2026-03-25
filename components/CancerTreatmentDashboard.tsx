@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays, Bell, SlidersHorizontal, Layers3, Stethoscope, Microscope, UserRound } from "lucide-react";
+import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays, Bell, SlidersHorizontal, Layers3, Stethoscope, Microscope, UserRound, UsersRound } from "lucide-react";
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -11,7 +11,14 @@ import AIPage from "./AIPage";
 import DashboardPage from "./DashboardPage";
 import PatientChartPage from "./PatientChartPage";
 import NewsFeedPanel from "./NewsFeedPanel";
-import { QuantumPanel, WaveVisualization } from './keywords-wave';
+import {
+  QuantumPanel,
+  WaveVisualization,
+  DoctorFeed,
+  ArticleReader,
+  type DoctorFeedCanvasBridge,
+  type PendingDoctorFeedConnection,
+} from './keywords-wave';
 import { useAuth } from '../lib/AuthContext';
 import ProfilePanel from './ProfilePanel';
 import NotificationsPanel from './NotificationsPanel';
@@ -401,6 +408,16 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [pendingPostId, setPendingPostId] = useState<string | null>(null);
+  const doctorFeedBridgeRef = useRef<DoctorFeedCanvasBridge | null>(null);
+  const [isDoctorFeedOpen, setIsDoctorFeedOpen] = useState(false);
+  const [feedFocusedDoctorId, setFeedFocusedDoctorId] = useState<number | null>(null);
+  const [feedFocusedPostId, setFeedFocusedPostId] = useState<number | null>(null);
+  const [doctorFeedRefreshTrigger, setDoctorFeedRefreshTrigger] = useState(0);
+  const [doctorFeedHighlightPostId, setDoctorFeedHighlightPostId] = useState<string | null>(null);
+  const [articleReaderOpen, setArticleReaderOpen] = useState(false);
+  const [readerArticle, setReaderArticle] = useState<{ title: string; description?: string; author?: string } | null>(null);
+  const pendingDoctorFeedApplyRef = useRef(0);
+  const [pendingDoctorFeedConnection, setPendingDoctorFeedConnection] = useState<PendingDoctorFeedConnection | null>(null);
   const [activeTimeRange, setActiveTimeRange] = useState<"1m" | "3m" | "6m" | "1y" | "custom">("1y");
   const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
@@ -562,6 +579,33 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
     setShowKeywordsTree(true);
     setPendingPostId(postId);
   }, []);
+
+  const closeDoctorFeed = useCallback(() => {
+    setIsDoctorFeedOpen(false);
+    setFeedFocusedDoctorId(null);
+    setFeedFocusedPostId(null);
+    setDoctorFeedHighlightPostId(null);
+  }, []);
+
+  const openDoctorFeedFromCanvas = useCallback((payload: { focusedDoctorId: number; focusedPostId: number }) => {
+    setFeedFocusedDoctorId(payload.focusedDoctorId);
+    setFeedFocusedPostId(payload.focusedPostId);
+    setIsDoctorFeedOpen(true);
+  }, []);
+
+  const bumpDoctorFeedRefresh = useCallback(() => setDoctorFeedRefreshTrigger((t) => t + 1), []);
+
+  const clearPendingDoctorFeedConnection = useCallback(() => {
+    setPendingDoctorFeedConnection(null);
+  }, []);
+
+  useEffect(() => {
+    if (!pendingPostId) return;
+    setIsDoctorFeedOpen(true);
+    setDoctorFeedHighlightPostId(pendingPostId);
+    setDoctorFeedRefreshTrigger((t) => t + 1);
+    setPendingPostId(null);
+  }, [pendingPostId]);
 
   const handleRefreshKeywords = () => {
     setIsRefreshing(true);
@@ -760,6 +804,23 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
         </div>
 
         <button
+          type="button"
+          onClick={() => {
+            if (isDoctorFeedOpen) {
+              closeDoctorFeed();
+            } else {
+              setIsDoctorFeedOpen(true);
+            }
+          }}
+          className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+            isDoctorFeedOpen ? "bg-white shadow-lg scale-105" : "bg-white/10 hover:bg-white/20 hover:scale-110"
+          }`}
+          title="Doctor Network"
+        >
+          <UsersRound className={`w-6 h-6 ${isDoctorFeedOpen ? "text-indigo-600" : "text-white"}`} />
+        </button>
+
+        <button
           onClick={() => {
             setIsGlobalQuantumOpen(true);
           }}
@@ -794,9 +855,13 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {showKeywordsTree ? (
-          <WaveVisualization 
-            pendingPostId={pendingPostId}
-            onPendingPostHandled={() => setPendingPostId(null)}
+          <WaveVisualization
+            doctorFeedBridgeRef={doctorFeedBridgeRef}
+            onDoctorFeedClose={closeDoctorFeed}
+            onDoctorFeedOpenFromCanvas={openDoctorFeedFromCanvas}
+            onDoctorFeedPostsChanged={bumpDoctorFeedRefresh}
+            pendingDoctorFeedConnection={pendingDoctorFeedConnection}
+            onConsumePendingDoctorFeedConnection={clearPendingDoctorFeedConnection}
           />
         ) : activeView === "dashboard" ? (
           <DashboardPage
@@ -812,6 +877,7 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
               setIsAIPanelOpen(true);
               setTimeout(() => setIsAIPanelVisible(true), 10);
             }}
+            onOpenNewsFeed={() => setIsNewsFeedOpen(true)}
             onOpenClinicalTrials={(opts) => {
               setClinicalTrialsNav({
                 listTab: opts?.listTab ?? "qualified",
@@ -831,14 +897,24 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
           />
         ) : activeView === "timeline" ? (
           <>
-            {/* Header */}
-            <div className="bg-white relative z-40">
+            {/* Header — avoid z-stacking above fixed overlays (e.g. Doctor Network in Keywords) */}
+            <div className="bg-white relative shrink-0 shadow-sm">
               <div className="px-8 py-6">
                 <div className="flex items-center justify-between mb-6">
                   <div>
                     <h1 className="text-[27px] font-medium text-gray-900 mb-1">Discovery</h1>
                     {selectedPatient ? (
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-gray-500 text-base">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-gray-500 text-base mt-1">
+                        {onChangePatient && (
+                          <button
+                            type="button"
+                            onClick={onChangePatient}
+                            className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-medium border border-indigo-200 transition-colors mr-1"
+                          >
+                            <UserRound className="w-3.5 h-3.5" />
+                            Change Patient
+                          </button>
+                        )}
                         <span className="text-gray-900 font-medium">{selectedPatient.name}</span>
                         <span className="text-gray-300" aria-hidden>·</span>
                         <span>{selectedPatient.age}yo {selectedPatient.gender} · {selectedPatient.diagnoses[0]} · {selectedPatient.mrn}</span>
@@ -847,7 +923,7 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
                       <p className="text-gray-500">Track treatment progress and key milestones</p>
                     )}
                   </div>
-                  <div className={`flex items-center gap-4 transition-all duration-500 ${keywordsNodeFocused ? 'pr-[440px]' : ''}`}>
+                  <div className={`flex items-center gap-4 transition-all duration-300 ease-in-out ${keywordsNodeFocused && discoveryTab === "keywords" ? "pr-[440px]" : ""}`}>
                     <div className="relative w-96">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                       <input
@@ -871,7 +947,7 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
                 </div>
                 
                 {/* Discovery Tabs + Keywords actions */}
-                <div className={`flex items-center justify-between mb-4 transition-all duration-500 ${keywordsNodeFocused ? 'pr-[440px]' : ''}`}>
+                <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-1">
                     {(["timeline", "keywords"] as const).map((tab) => (
                       <button
@@ -888,6 +964,17 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
                     ))}
                   </div>
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setChartBackView(activeView);
+                        setActiveView("patientChart");
+                        setShowKeywordsTree(false);
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
+                    >
+                      <FileText className="w-4 h-4" />
+                      Open Chart
+                    </button>
                     {isResearchEnabled && (
                       <button
                         onClick={() => setIsNewsFeedOpen(true)}
@@ -897,6 +984,16 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
                         News Feed
                       </button>
                     )}
+                    <button
+                      onClick={() => {
+                        setIsAIPanelOpen(true);
+                        setTimeout(() => setIsAIPanelVisible(true), 10);
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      Ask AI
+                    </button>
                   </div>
                 </div>
 
@@ -1052,9 +1149,13 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
             {discoveryTab === "keywords" && (
               <div className="flex-1 overflow-hidden">
                 <WaveVisualization
-                  pendingPostId={pendingPostId}
-                  onPendingPostHandled={() => setPendingPostId(null)}
+                  doctorFeedBridgeRef={doctorFeedBridgeRef}
+                  onDoctorFeedClose={closeDoctorFeed}
+                  onDoctorFeedOpenFromCanvas={openDoctorFeedFromCanvas}
+                  onDoctorFeedPostsChanged={bumpDoctorFeedRefresh}
                   onFocusedNodeChange={setKeywordsNodeFocused}
+                  pendingDoctorFeedConnection={pendingDoctorFeedConnection}
+                  onConsumePendingDoctorFeedConnection={clearPendingDoctorFeedConnection}
                 />
               </div>
             )}
@@ -1450,7 +1551,24 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
             <ClinicalTrialsPage
               onClose={() => setActiveView(getDefaultViewForScope(featureScope))}
               headerActions={<div className="flex items-center gap-3">{renderHeaderActions()}</div>}
+              tabRowActions={<>
+                <button
+                  onClick={() => { setChartBackView(activeView); setActiveView("patientChart"); }}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
+                >
+                  <FileText className="w-4 h-4" />
+                  Open Chart
+                </button>
+                <button
+                  onClick={() => { setIsAIPanelOpen(true); setTimeout(() => setIsAIPanelVisible(true), 10); }}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Ask AI
+                </button>
+              </>}
               selectedPatient={selectedPatient}
+              onChangePatient={onChangePatient}
               trialsListTab={clinicalTrialsNav.listTab}
               onTrialsListTabChange={(tab) =>
                 setClinicalTrialsNav((s) => ({ ...s, listTab: tab }))
@@ -1466,6 +1584,24 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
             <TrendingResearchPage
               onClose={() => setActiveView(getDefaultViewForScope(featureScope))}
               headerActions={<div className="flex items-center gap-3">{renderHeaderActions()}</div>}
+              tabRowActions={<>
+                <button
+                  onClick={() => { setChartBackView(activeView); setActiveView("patientChart"); }}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
+                >
+                  <FileText className="w-4 h-4" />
+                  Open Chart
+                </button>
+                <button
+                  onClick={() => { setIsAIPanelOpen(true); setTimeout(() => setIsAIPanelVisible(true), 10); }}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Ask AI
+                </button>
+              </>}
+              selectedPatient={selectedPatient}
+              onChangePatient={onChangePatient}
             />
           </div>
         ) : (
@@ -1662,6 +1798,44 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
 
       {/* Global Quantum Side Panel */}
       <QuantumPanel isOpen={isGlobalQuantumOpen} onClose={() => setIsGlobalQuantumOpen(false)} />
+
+      <DoctorFeed
+        isOpen={isDoctorFeedOpen}
+        onClose={closeDoctorFeed}
+        onArticleClick={(article) => {
+          setReaderArticle(article);
+          setArticleReaderOpen(true);
+        }}
+        onConnectionClick={(connection, doctorInfo) => {
+          if (doctorFeedBridgeRef.current) {
+            doctorFeedBridgeRef.current.handleConnectionClick(connection, doctorInfo);
+            return;
+          }
+          const id = ++pendingDoctorFeedApplyRef.current;
+          closeDoctorFeed();
+          setPendingDoctorFeedConnection({ id, connection, doctorInfo });
+          if (isClinicalEnabled) {
+            setShowKeywordsTree(false);
+            setActiveView("timeline");
+            setDiscoveryTab("keywords");
+          } else {
+            setShowKeywordsTree(true);
+          }
+        }}
+        focusedDoctorId={feedFocusedDoctorId}
+        focusedPostId={feedFocusedPostId}
+        refreshTrigger={doctorFeedRefreshTrigger}
+        highlightSupabasePostId={doctorFeedHighlightPostId}
+      />
+
+      <ArticleReader
+        isOpen={articleReaderOpen}
+        onClose={() => {
+          setArticleReaderOpen(false);
+          setReaderArticle(null);
+        }}
+        article={readerArticle}
+      />
     </div>
   );
 }

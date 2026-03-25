@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
-import { Search, X, ExternalLink, MapPin, Users, Calendar, FileText, ChevronRight } from "lucide-react";
+import { Search, X, ExternalLink, MapPin, Users, Calendar, FileText, ChevronRight, UserRound } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import type { Patient } from "../lib/patients";
 import { getQualifiedTrialIds } from "../lib/trialQualification";
@@ -432,7 +432,9 @@ const getStatusColor = (status: string) => {
 interface ClinicalTrialsPageProps {
   onClose: () => void;
   headerActions?: ReactNode;
+  tabRowActions?: ReactNode;
   selectedPatient?: Patient;
+  onChangePatient?: () => void;
   trialsListTab?: "all" | "qualified";
   onTrialsListTabChange?: (tab: "all" | "qualified") => void;
   focusTrialId?: string | null;
@@ -441,7 +443,9 @@ interface ClinicalTrialsPageProps {
 
 export default function ClinicalTrialsPage({
   headerActions,
+  tabRowActions,
   selectedPatient,
+  onChangePatient,
   trialsListTab: trialsListTabProp = "all",
   onTrialsListTabChange,
   focusTrialId,
@@ -508,34 +512,29 @@ export default function ClinicalTrialsPage({
         {/* Header */}
         <div className="border-b border-gray-200 bg-white shadow-sm">
           <div className="px-8 py-6">
+            {/* Row 1: title + search + header icons */}
             <div className="flex items-center justify-between mb-6">
-              <div className="flex-1 min-w-0 pr-6">
-                <h1 className="text-gray-900 mb-1">Clinical Trials</h1>
-                <p className="text-gray-500">Explore relevant breast cancer clinical trials and research studies</p>
-                <div className="flex gap-2 mt-4">
-                  <button
-                    type="button"
-                    onClick={() => setListTab("all")}
-                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                      listTab === "all"
-                        ? "bg-indigo-600 text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    Show All
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setListTab("qualified")}
-                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                      listTab === "qualified"
-                        ? "bg-indigo-600 text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    Qualified Trials
-                  </button>
-                </div>
+              <div>
+                <h1 className="text-[27px] font-medium text-gray-900 mb-1">Clinical Trials</h1>
+                {selectedPatient ? (
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-gray-500 text-base mt-1">
+                    {onChangePatient && (
+                      <button
+                        type="button"
+                        onClick={onChangePatient}
+                        className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-medium border border-indigo-200 transition-colors mr-1"
+                      >
+                        <UserRound className="w-3.5 h-3.5" />
+                        Change Patient
+                      </button>
+                    )}
+                    <span className="text-gray-900 font-medium">{selectedPatient.name}</span>
+                    <span className="text-gray-300" aria-hidden>·</span>
+                    <span>{selectedPatient.age}yo {selectedPatient.gender} · {selectedPatient.diagnoses[0]} · {selectedPatient.mrn}</span>
+                  </div>
+                ) : (
+                  <p className="text-gray-500">Explore relevant breast cancer clinical trials and research studies</p>
+                )}
               </div>
               <div className="flex items-center gap-3">
                 <div className="relative w-96">
@@ -559,11 +558,32 @@ export default function ClinicalTrialsPage({
                 {headerActions}
               </div>
             </div>
+
+            {/* Row 2: tabs left, action buttons right — mirrors Discovery tabs row */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-1">
+                {(["all", "qualified"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setListTab(tab)}
+                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                      listTab === tab
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+                    }`}
+                  >
+                    {tab === "all" ? "Show All" : "Qualified Trials"}
+                  </button>
+                ))}
+              </div>
+              {tabRowActions && <div className="flex items-center gap-2">{tabRowActions}</div>}
+            </div>
           </div>
         </div>
 
         {/* Results Summary */}
-        <div className="px-8 py-4 bg-gray-50 border-b border-gray-200">
+        <div className="px-8 py-4 bg-gray-50 border-b border-gray-200 -mt-4">
           <p className="text-gray-600 text-sm">
             Showing <span className="font-semibold text-gray-900">{filteredTrials.length}</span> clinical trial{filteredTrials.length !== 1 ? 's' : ''}
             {searchQuery && <span> matching "{searchQuery}"</span>}
