@@ -1,8 +1,10 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import { Search, X, ExternalLink, MapPin, Users, Calendar, FileText, ChevronRight } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import type { Patient } from "../lib/patients";
+import { getQualifiedTrialIds } from "../lib/trialQualification";
 
-interface ClinicalTrial {
+export interface ClinicalTrial {
   id: string;
   nctId: string;
   title: string;
@@ -34,7 +36,7 @@ interface ClinicalTrial {
   }[];
 }
 
-const clinicalTrialsData: ClinicalTrial[] = [
+export const clinicalTrialsData: ClinicalTrial[] = [
   {
     id: "trial-1",
     nctId: "NCT05234567",
@@ -430,23 +432,65 @@ const getStatusColor = (status: string) => {
 interface ClinicalTrialsPageProps {
   onClose: () => void;
   headerActions?: ReactNode;
+  selectedPatient?: Patient;
+  trialsListTab?: "all" | "qualified";
+  onTrialsListTabChange?: (tab: "all" | "qualified") => void;
+  focusTrialId?: string | null;
+  onTrialFocusConsumed?: () => void;
 }
 
-export default function ClinicalTrialsPage({ headerActions }: ClinicalTrialsPageProps) {
+export default function ClinicalTrialsPage({
+  headerActions,
+  selectedPatient,
+  trialsListTab: trialsListTabProp = "all",
+  onTrialsListTabChange,
+  focusTrialId,
+  onTrialFocusConsumed,
+}: ClinicalTrialsPageProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTrial, setSelectedTrial] = useState<ClinicalTrial | null>(null);
   const [isPanelVisible, setIsPanelVisible] = useState(false);
+  const [internalListTab, setInternalListTab] = useState<"all" | "qualified">("all");
 
-  const filteredTrials = clinicalTrialsData.filter(trial => {
-    const query = searchQuery.toLowerCase();
-    return (
-      trial.title.toLowerCase().includes(query) ||
-      trial.nctId.toLowerCase().includes(query) ||
-      trial.condition.toLowerCase().includes(query) ||
-      trial.intervention.toLowerCase().includes(query) ||
-      trial.sponsor.toLowerCase().includes(query)
-    );
-  });
+  const listTab = onTrialsListTabChange ? trialsListTabProp : internalListTab;
+  const setListTab = onTrialsListTabChange ?? setInternalListTab;
+
+  const qualifiedIds = useMemo(
+    () => (selectedPatient ? getQualifiedTrialIds(selectedPatient) : []),
+    [selectedPatient]
+  );
+
+  const searchFiltered = useMemo(
+    () =>
+      clinicalTrialsData.filter((trial) => {
+        const query = searchQuery.toLowerCase();
+        return (
+          trial.title.toLowerCase().includes(query) ||
+          trial.nctId.toLowerCase().includes(query) ||
+          trial.condition.toLowerCase().includes(query) ||
+          trial.intervention.toLowerCase().includes(query) ||
+          trial.sponsor.toLowerCase().includes(query)
+        );
+      }),
+    [searchQuery]
+  );
+
+  const filteredTrials = useMemo(() => {
+    if (listTab === "all") return searchFiltered;
+    if (!selectedPatient) return [];
+    const idSet = new Set(qualifiedIds);
+    return searchFiltered.filter((t) => idSet.has(t.id));
+  }, [listTab, searchFiltered, selectedPatient, qualifiedIds]);
+
+  useEffect(() => {
+    if (!focusTrialId) return;
+    const trial = clinicalTrialsData.find((t) => t.id === focusTrialId);
+    if (trial) {
+      setSelectedTrial(trial);
+      setTimeout(() => setIsPanelVisible(true), 10);
+    }
+    onTrialFocusConsumed?.();
+  }, [focusTrialId, onTrialFocusConsumed]);
 
   const handleTrialClick = (trial: ClinicalTrial) => {
     setSelectedTrial(trial);
@@ -465,9 +509,33 @@ export default function ClinicalTrialsPage({ headerActions }: ClinicalTrialsPage
         <div className="border-b border-gray-200 bg-white shadow-sm">
           <div className="px-8 py-6">
             <div className="flex items-center justify-between mb-6">
-              <div>
+              <div className="flex-1 min-w-0 pr-6">
                 <h1 className="text-gray-900 mb-1">Clinical Trials</h1>
                 <p className="text-gray-500">Explore relevant breast cancer clinical trials and research studies</p>
+                <div className="flex gap-2 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => setListTab("all")}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                      listTab === "all"
+                        ? "bg-indigo-600 text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    Show All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setListTab("qualified")}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                      listTab === "qualified"
+                        ? "bg-indigo-600 text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    Qualified Trials
+                  </button>
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 <div className="relative w-96">
@@ -499,12 +567,30 @@ export default function ClinicalTrialsPage({ headerActions }: ClinicalTrialsPage
           <p className="text-gray-600 text-sm">
             Showing <span className="font-semibold text-gray-900">{filteredTrials.length}</span> clinical trial{filteredTrials.length !== 1 ? 's' : ''}
             {searchQuery && <span> matching "{searchQuery}"</span>}
+            {listTab === "qualified" && selectedPatient && (
+              <span className="text-gray-500">
+                {" "}
+                for {selectedPatient.name}
+                {qualifiedIds.length === 0 && " (no matches in this demo)"}
+              </span>
+            )}
+            {listTab === "qualified" && !selectedPatient && (
+              <span className="text-amber-700"> — select a patient to see qualified trials.</span>
+            )}
           </p>
         </div>
 
         {/* Trials List */}
         <div className="flex-1 overflow-y-auto px-8 py-6">
           <div className="space-y-4">
+            {filteredTrials.length === 0 && listTab === "qualified" && !selectedPatient ? (
+              <p className="text-gray-600 text-sm">Choose a patient from the header to filter trials they may qualify for.</p>
+            ) : null}
+            {filteredTrials.length === 0 && listTab === "qualified" && selectedPatient && qualifiedIds.length === 0 ? (
+              <p className="text-gray-600 text-sm">
+                No demo trial matches for this patient&apos;s diagnoses. Try Show All or another patient.
+              </p>
+            ) : null}
             {filteredTrials.map((trial) => (
               <div
                 key={trial.id}

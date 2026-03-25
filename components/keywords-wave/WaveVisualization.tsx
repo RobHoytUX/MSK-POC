@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Bell } from 'lucide-react';
 import { ShareModal } from './ShareModal';
 import { SaveModal } from './SaveModal';
 import { QuantumPanel } from './QuantumPanel';
@@ -10,10 +9,6 @@ import { PostToFeedModal } from './PostToFeedModal';
 import { DoctorConnectionBanner } from './DoctorConnectionBanner';
 import { ClinicalNotesModal } from './ClinicalNotesModal';
 import { toast } from 'sonner';
-import { useAuth } from '../../lib/AuthContext';
-import ProfilePanel from '../ProfilePanel';
-import NotificationsPanel from '../NotificationsPanel';
-
 interface Node {
   id: string;
   label: string;
@@ -27,9 +22,9 @@ interface Column {
 }
 
 interface WaveVisualizationProps {
-  onClose?: () => void;
   pendingPostId?: string | null;
   onPendingPostHandled?: () => void;
+  onFocusedNodeChange?: (isFocused: boolean) => void;
 }
 
 const medicalData: Column[] = [
@@ -109,10 +104,7 @@ const medicalData: Column[] = [
   },
 ];
 
-export function WaveVisualization({ onClose, pendingPostId, onPendingPostHandled }: WaveVisualizationProps) {
-  const { profile } = useAuth();
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+export function WaveVisualization({ pendingPostId, onPendingPostHandled, onFocusedNodeChange }: WaveVisualizationProps) {
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set());
   const [focusedNode, setFocusedNode] = useState<string | null>(null);
@@ -238,11 +230,13 @@ export function WaveVisualization({ onClose, pendingPostId, onPendingPostHandled
       setSelectedNodes(new Set());
       setDetailView('connection');
       setDetailNodeId(null);
+      onFocusedNodeChange?.(false);
     } else {
       setFocusedNode(nodeId);
       setSelectedNodes(new Set([nodeId]));
       setDetailView('connection');
       setDetailNodeId(null);
+      onFocusedNodeChange?.(true);
     }
   };
 
@@ -295,10 +289,12 @@ export function WaveVisualization({ onClose, pendingPostId, onPendingPostHandled
       setFocusedNode(savedCanvasState.focusedNode);
       setSelectedNodes(savedCanvasState.selectedNodes);
       setSavedCanvasState(null);
+      onFocusedNodeChange?.(!!savedCanvasState.focusedNode);
       toast.success('Restored your previous view');
     } else {
       setFocusedNode(null);
       setSelectedNodes(new Set());
+      onFocusedNodeChange?.(false);
       setShareModalOpen(false);
       setSaveModalOpen(false);
       setCommentPanelOpen(false);
@@ -622,75 +618,10 @@ export function WaveVisualization({ onClose, pendingPostId, onPendingPostHandled
   };
 
   return (
-    <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 overflow-auto">
+    <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 overflow-auto relative">
       <div className="min-w-[1200px] h-full relative flex">
         {/* Main Content Area */}
         <div className={`flex-1 transition-all duration-500 ${focusedNode ? 'mr-[440px]' : ''}`}>
-        {/* Top Navigation Bar */}
-        <div className="bg-white border-b border-gray-200 px-6 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-6">
-              {/* Back Button */}
-              {onClose && (
-                <button
-                  onClick={onClose}
-                  className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  Go Back
-                </button>
-              )}
-              
-              <button
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 border-cyan-500 text-cyan-600"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
-                Wave
-              </button>
-            </div>
-
-            <div className="flex items-center gap-4">
-              {focusedNode && (
-                <button 
-                  onClick={handleClear}
-                  className="px-4 py-2 bg-white hover:bg-gray-100 text-gray-700 text-sm font-semibold rounded-lg border border-gray-300 shadow-sm transition-all"
-                >
-                  Clear
-                </button>
-              )}
-              {!focusedNode && (
-                <>
-                  <span className="text-sm text-gray-600 font-medium">
-                    {selectedNodes.size} Selected
-                  </span>
-                  <button className="px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded border border-gray-300 transition-colors">
-                    View History
-                  </button>
-                  <button className="px-4 py-1.5 text-sm text-white bg-cyan-500 hover:bg-cyan-600 rounded transition-colors shadow-sm">
-                    Export
-                  </button>
-                </>
-              )}
-              <div className="h-6 w-px bg-gray-200" />
-              <button
-                onClick={() => setIsNotificationsOpen(true)}
-                className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
-                title="Notifications"
-              >
-                <Bell className="w-5 h-5 text-gray-600" />
-              </button>
-              <button
-                onClick={() => setIsProfileOpen(true)}
-                className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-sm font-bold hover:scale-105 transition-transform shadow-md"
-                title="My Profile"
-              >
-                {profile?.avatar_initials || 'U'}
-              </button>
-            </div>
-          </div>
-        </div>
 
         {/* Visualization */}
         <div className="p-8">
@@ -704,9 +635,18 @@ export function WaveVisualization({ onClose, pendingPostId, onPendingPostHandled
               />
             )}
             
-            {/* Action Icon Buttons - Top Right of Canvas (only in focused mode) */}
+            {/* Action Icon Buttons - Top of Canvas spanning full width (only in focused mode) */}
             {focusedNode && (
-              <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+              <div className="absolute top-4 left-4 right-4 z-10 flex items-center justify-between">
+                {/* Clear on the far left */}
+                <button
+                  onClick={handleClear}
+                  className="px-4 py-2 bg-white hover:bg-gray-100 text-gray-700 text-sm font-semibold rounded-lg border border-gray-300 shadow-sm transition-all"
+                >
+                  Clear
+                </button>
+                {/* Action icons on the far right */}
+                <div className="flex items-center gap-2">
                 <button
                   onClick={() => setShareModalOpen(true)}
                   className="p-2.5 bg-white hover:bg-gray-50 rounded-lg shadow-md border border-gray-200 transition-all group"
@@ -766,6 +706,7 @@ export function WaveVisualization({ onClose, pendingPostId, onPendingPostHandled
                     <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full border-2 border-white"></span>
                   </div>
                 </button>
+                </div> {/* end icon group */}
               </div>
             )}
 
@@ -1319,7 +1260,7 @@ export function WaveVisualization({ onClose, pendingPostId, onPendingPostHandled
                 animate={{ x: 0 }}
                 exit={{ x: 440 }}
                 transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="fixed top-0 right-0 w-[440px] h-full bg-white shadow-2xl border-l border-gray-200 overflow-hidden z-20"
+                className="fixed top-0 right-0 w-[440px] h-screen bg-white shadow-2xl border-l border-gray-200 overflow-hidden z-50"
               >
                 <div className="px-6 py-6 border-b border-gray-200">
                   <div className="flex items-center justify-between mb-1">
@@ -1592,8 +1533,6 @@ export function WaveVisualization({ onClose, pendingPostId, onPendingPostHandled
         onSave={handleSaveNotes}
       />
 
-      <ProfilePanel isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
-      <NotificationsPanel isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} />
     </div>
   );
 }

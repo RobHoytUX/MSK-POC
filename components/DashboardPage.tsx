@@ -1,7 +1,11 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useMemo, useState } from "react";
 import myChartLogo from "../src/assets/mychart-logo.png";
 import { Patient } from "../lib/patients";
+import { getQualifiedTrialIds } from "../lib/trialQualification";
+import { clinicalTrialsData } from "./ClinicalTrialsPage";
 import { CalendarCheck2, FlaskConical, Pill, AlertTriangle, Clock, Search, X, FileText, Sparkles } from "lucide-react";
+import { useAuth } from "../lib/AuthContext";
+import PatientChartPage from "./PatientChartPage";
 
 interface DashboardPageProps {
   selectedPatient?: Patient;
@@ -9,6 +13,8 @@ interface DashboardPageProps {
   onOpenPatientChart?: () => void;
   headerActions?: ReactNode;
   onAskAI?: () => void;
+  /** Opens Clinical Trials; defaults to the Qualified tab unless `listTab` is `"all"`. */
+  onOpenClinicalTrials?: (opts?: { trialId?: string; listTab?: "all" | "qualified" }) => void;
 }
 
 const cards = [
@@ -41,8 +47,34 @@ const cards = [
   },
 ];
 
-export default function DashboardPage({ selectedPatient, onOpenPatientChart, headerActions, onAskAI }: DashboardPageProps) {
+export default function DashboardPage({
+  selectedPatient,
+  headerActions,
+  onAskAI,
+  onOpenClinicalTrials,
+}: DashboardPageProps) {
+  const { profile, user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
+  const [isChartOpen, setIsChartOpen] = useState(false);
+  const [isChartVisible, setIsChartVisible] = useState(false);
+
+  const openChart = () => {
+    setIsChartOpen(true);
+    setTimeout(() => setIsChartVisible(true), 10);
+  };
+
+  const closeChart = () => {
+    setIsChartVisible(false);
+    setTimeout(() => setIsChartOpen(false), 300);
+  };
+  const welcomeName = useMemo(() => {
+    const fromProfile = profile?.full_name?.trim();
+    if (fromProfile) return fromProfile;
+    const email = user?.email?.split("@")[0];
+    if (email) return email;
+    return "there";
+  }, [profile?.full_name, user?.email]);
+
   const activeAlerts = selectedPatient
     ? [
         `Review recent ${selectedPatient.diagnoses[0]} progression details`,
@@ -52,6 +84,18 @@ export default function DashboardPage({ selectedPatient, onOpenPatientChart, hea
       ]
     : [];
 
+  const qualifiedTrialIds = useMemo(
+    () => (selectedPatient ? getQualifiedTrialIds(selectedPatient) : []),
+    [selectedPatient]
+  );
+  const qualifiedTrialsForUi = useMemo(
+    () =>
+      qualifiedTrialIds
+        .map((id) => clinicalTrialsData.find((t) => t.id === id))
+        .filter((t): t is NonNullable<typeof t> => Boolean(t)),
+    [qualifiedTrialIds]
+  );
+
   return (
     <div className="h-full bg-white overflow-auto">
       <div className="bg-white">
@@ -59,12 +103,8 @@ export default function DashboardPage({ selectedPatient, onOpenPatientChart, hea
           {/* Row 1: title + search + header icons — mirrors Timeline row 1 */}
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-gray-900 mb-1">Action Board</h1>
-              {selectedPatient && (
-                <p className="text-gray-500">
-                  {selectedPatient.age}yo {selectedPatient.gender} · {selectedPatient.diagnoses[0]} · {selectedPatient.mrn}
-                </p>
-              )}
+              <h1 className="text-[27px] font-medium text-gray-900 mb-1">Action Board</h1>
+              <p className="text-gray-500">Welcome, {welcomeName}!</p>
             </div>
             <div className="flex items-center gap-4">
               <div className="relative w-96">
@@ -89,29 +129,11 @@ export default function DashboardPage({ selectedPatient, onOpenPatientChart, hea
             </div>
           </div>
 
-          {/* Row 2: active alerts left + action buttons right — mirrors Timeline row 2 */}
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-2">
-              {selectedPatient && activeAlerts.length > 0 && (
-                <>
-                  <span className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full bg-red-50 text-red-700 border border-red-200">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    Active Alerts
-                  </span>
-                  {activeAlerts.map((alert, idx) => (
-                    <span
-                      key={idx}
-                      className="text-[11px] px-2 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200"
-                    >
-                      {alert}
-                    </span>
-                  ))}
-                </>
-              )}
-            </div>
+          {/* Row 2: action buttons right — mirrors Timeline row 2 */}
+          <div className="flex items-center justify-end gap-4">
             <div className="flex items-center gap-3">
               <button
-                onClick={onOpenPatientChart}
+                onClick={openChart}
                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
               >
                 <FileText className="w-4 h-4" />
@@ -129,8 +151,27 @@ export default function DashboardPage({ selectedPatient, onOpenPatientChart, hea
         </div>
       </div>
 
-      <div className="px-8 py-8 flex flex-col items-center">
+      <div className="px-8 py-4 -mt-6 flex flex-col items-center">
         <div className="w-full max-w-5xl">
+
+        {selectedPatient && activeAlerts.length > 0 && (
+          <div className="mb-10">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle className="w-4 h-4 text-indigo-600" />
+              <p className="text-sm font-semibold text-gray-900">Active Alerts</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {activeAlerts.map((alert, idx) => (
+                <span
+                  key={idx}
+                  className="text-[14px] px-2 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200"
+                >
+                  {alert}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Up Next */}
         {selectedPatient && (
@@ -171,6 +212,56 @@ export default function DashboardPage({ selectedPatient, onOpenPatientChart, hea
                 </div>
               </div>
             </div>
+
+            {onOpenClinicalTrials && (
+              <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <FlaskConical className="w-4 h-4 text-emerald-700" />
+                  <h3 className="text-sm font-semibold text-emerald-900">Clinical trial qualification</h3>
+                </div>
+                {qualifiedTrialsForUi.length > 0 ? (
+                  <>
+                    <p className="text-sm text-gray-800 mb-3">
+                      This patient is flagged as potentially qualified for{" "}
+                      <span className="font-semibold">{qualifiedTrialsForUi.length}</span> demo trial
+                      {qualifiedTrialsForUi.length !== 1 ? "s" : ""} based on diagnosis rules.
+                    </p>
+                    <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
+                      {qualifiedTrialsForUi.map((trial) => (
+                        <button
+                          key={trial.id}
+                          type="button"
+                          onClick={() => onOpenClinicalTrials({ trialId: trial.id })}
+                          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors"
+                        >
+                          Open {trial.nctId}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => onOpenClinicalTrials()}
+                        className="inline-flex items-center justify-center px-4 py-2 rounded-full border border-emerald-600 text-emerald-800 hover:bg-emerald-100 text-sm font-medium transition-colors"
+                      >
+                        View all qualified trials
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-sm text-gray-700">
+                      No matching demo clinical trials for this patient&apos;s current diagnoses.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => onOpenClinicalTrials({ listTab: "all" })}
+                      className="inline-flex items-center justify-center px-4 py-2 rounded-full bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium transition-colors"
+                    >
+                      Browse all trials
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-5">
               <div className="mb-3 flex items-start justify-between gap-3">
@@ -231,6 +322,26 @@ export default function DashboardPage({ selectedPatient, onOpenPatientChart, hea
 
         </div> {/* end max-w-5xl wrapper */}
       </div>
+
+      {/* Patient Chart Side Panel */}
+      {isChartOpen && (
+        <>
+          {/* Overlay */}
+          <div
+            className={`fixed inset-0 bg-black/30 z-40 transition-opacity duration-300 ${isChartVisible ? "opacity-100" : "opacity-0"}`}
+            onClick={closeChart}
+          />
+          {/* Panel — 50% width, full height */}
+          <div
+            className={`fixed top-0 right-0 h-full w-1/2 bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out ${isChartVisible ? "translate-x-0" : "translate-x-full"}`}
+          >
+            <PatientChartPage
+              selectedPatient={selectedPatient}
+              onBack={closeChart}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }
