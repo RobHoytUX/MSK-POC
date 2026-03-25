@@ -152,30 +152,11 @@ export default function DashboardPage({
       </div>
 
       <div className="px-8 py-4 -mt-6 flex flex-col items-center">
-        <div className="w-full max-w-5xl">
+        <div className="w-full max-w-5xl -mt-4">
 
-        {selectedPatient && activeAlerts.length > 0 && (
-          <div className="mb-10">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="w-4 h-4 text-indigo-600" />
-              <p className="text-sm font-semibold text-gray-900">Active Alerts</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {activeAlerts.map((alert, idx) => (
-                <span
-                  key={idx}
-                  className="text-[14px] px-2 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200"
-                >
-                  {alert}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Up Next */}
+        {/* Up Next — patient summary card only */}
         {selectedPatient && (
-          <div className="mb-10">
+          <div className="mb-8">
             <div className="flex items-center gap-2 mb-3">
               <Clock className="w-4 h-4 text-indigo-600" />
               <p className="text-sm font-semibold text-gray-900">My Patient</p>
@@ -212,76 +193,6 @@ export default function DashboardPage({
                 </div>
               </div>
             </div>
-
-            {onOpenClinicalTrials && (
-              <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <FlaskConical className="w-4 h-4 text-emerald-700" />
-                  <h3 className="text-sm font-semibold text-emerald-900">Clinical trial qualification</h3>
-                </div>
-                {qualifiedTrialsForUi.length > 0 ? (
-                  <>
-                    <p className="text-sm text-gray-800 mb-3">
-                      This patient is flagged as potentially qualified for{" "}
-                      <span className="font-semibold">{qualifiedTrialsForUi.length}</span> demo trial
-                      {qualifiedTrialsForUi.length !== 1 ? "s" : ""} based on diagnosis rules.
-                    </p>
-                    <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
-                      {qualifiedTrialsForUi.map((trial) => (
-                        <button
-                          key={trial.id}
-                          type="button"
-                          onClick={() => onOpenClinicalTrials({ trialId: trial.id })}
-                          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors"
-                        >
-                          Open {trial.nctId}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => onOpenClinicalTrials()}
-                        className="inline-flex items-center justify-center px-4 py-2 rounded-full border border-emerald-600 text-emerald-800 hover:bg-emerald-100 text-sm font-medium transition-colors"
-                      >
-                        View all qualified trials
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <div className="space-y-3">
-                    <p className="text-sm text-gray-700">
-                      No matching demo clinical trials for this patient&apos;s current diagnoses.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => onOpenClinicalTrials({ listTab: "all" })}
-                      className="inline-flex items-center justify-center px-4 py-2 rounded-full bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium transition-colors"
-                    >
-                      Browse all trials
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-5">
-              <div className="mb-3 flex items-start justify-between gap-3">
-                <h3 className="text-sm font-semibold text-indigo-900">AI Insights and Recommendations</h3>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="rounded-lg border border-indigo-200 bg-white px-4 py-3">
-                  <p className="text-xs text-indigo-700 font-medium mb-1">Insight</p>
-                  <p className="text-sm text-gray-800">
-                    Current diagnosis and medication profile suggest stable short-term follow-up trajectory.
-                  </p>
-                </div>
-                <div className="rounded-lg border border-indigo-200 bg-white px-4 py-3">
-                  <p className="text-xs text-indigo-700 font-medium mb-1">Recommendation</p>
-                  <p className="text-sm text-gray-800">
-                    Prioritize review of upcoming appointment prep and latest lab trends before chart round.
-                  </p>
-                </div>
-              </div>
-            </div>
           </div>
         )}
 
@@ -314,6 +225,97 @@ export default function DashboardPage({
             </div>
           ))}
         </div>
+
+        {selectedPatient && activeAlerts.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle className="w-4 h-4 text-indigo-600" />
+              <p className="text-sm font-semibold text-gray-900">Active Alerts</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {activeAlerts.map((alert, idx) => (
+                <span
+                  key={idx}
+                  className="text-[14px] px-2 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200"
+                >
+                  {alert}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {selectedPatient && onOpenClinicalTrials && (
+          <div className="mb-8 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <FlaskConical className="w-4 h-4 text-emerald-700" />
+              <h3 className="text-sm font-semibold text-emerald-900">Clinical trial qualification</h3>
+            </div>
+            {qualifiedTrialsForUi.length > 0 ? (
+              <>
+                <p className="text-sm text-gray-800 mb-3">
+                  This patient is flagged as potentially qualified for{" "}
+                  <span className="font-semibold">{qualifiedTrialsForUi.length}</span> demo trial
+                  {qualifiedTrialsForUi.length !== 1 ? "s" : ""} based on diagnosis rules.
+                </p>
+                <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
+                  {qualifiedTrialsForUi.map((trial) => (
+                    <button
+                      key={trial.id}
+                      type="button"
+                      onClick={() => onOpenClinicalTrials({ trialId: trial.id })}
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors"
+                    >
+                      Open {trial.nctId}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => onOpenClinicalTrials()}
+                    className="inline-flex items-center justify-center px-4 py-2 rounded-full border border-emerald-600 text-emerald-800 hover:bg-emerald-100 text-sm font-medium transition-colors"
+                  >
+                    View all qualified trials
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-gray-700">
+                  No matching demo clinical trials for this patient&apos;s current diagnoses.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onOpenClinicalTrials({ listTab: "all" })}
+                  className="inline-flex items-center justify-center px-4 py-2 rounded-full bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium transition-colors"
+                >
+                  Browse all trials
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {selectedPatient && (
+          <div className="mb-10 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-5">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <h3 className="text-sm font-semibold text-indigo-900">AI Insights and Recommendations</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="rounded-lg border border-indigo-200 bg-white px-4 py-3">
+                <p className="text-xs text-indigo-700 font-medium mb-1">Insight</p>
+                <p className="text-sm text-gray-800">
+                  Current diagnosis and medication profile suggest stable short-term follow-up trajectory.
+                </p>
+              </div>
+              <div className="rounded-lg border border-indigo-200 bg-white px-4 py-3">
+                <p className="text-xs text-indigo-700 font-medium mb-1">Recommendation</p>
+                <p className="text-sm text-gray-800">
+                  Prioritize review of upcoming appointment prep and latest lab trends before chart round.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="w-full flex items-center gap-3 mb-8">
           <span className="text-sm text-gray-600">Data from :</span>
