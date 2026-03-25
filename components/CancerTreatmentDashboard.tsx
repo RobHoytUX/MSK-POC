@@ -408,6 +408,18 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [pendingPostId, setPendingPostId] = useState<string | null>(null);
+  const [isGlobalChartOpen, setIsGlobalChartOpen] = useState(false);
+  const [isGlobalChartVisible, setIsGlobalChartVisible] = useState(false);
+
+  const openGlobalChart = () => {
+    setIsGlobalChartOpen(true);
+    setTimeout(() => setIsGlobalChartVisible(true), 10);
+  };
+  const closeGlobalChart = () => {
+    setIsGlobalChartVisible(false);
+    setTimeout(() => setIsGlobalChartOpen(false), 300);
+  };
+
   const doctorFeedBridgeRef = useRef<DoctorFeedCanvasBridge | null>(null);
   const [isDoctorFeedOpen, setIsDoctorFeedOpen] = useState(false);
   const [feedFocusedDoctorId, setFeedFocusedDoctorId] = useState<number | null>(null);
@@ -1553,7 +1565,7 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
               headerActions={<div className="flex items-center gap-3">{renderHeaderActions()}</div>}
               tabRowActions={<>
                 <button
-                  onClick={() => { setChartBackView(activeView); setActiveView("patientChart"); }}
+                  onClick={openGlobalChart}
                   className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
                 >
                   <FileText className="w-4 h-4" />
@@ -1586,7 +1598,7 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
               headerActions={<div className="flex items-center gap-3">{renderHeaderActions()}</div>}
               tabRowActions={<>
                 <button
-                  onClick={() => { setChartBackView(activeView); setActiveView("patientChart"); }}
+                  onClick={openGlobalChart}
                   className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
                 >
                   <FileText className="w-4 h-4" />
@@ -1798,6 +1810,24 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
 
       {/* Global Quantum Side Panel */}
       <QuantumPanel isOpen={isGlobalQuantumOpen} onClose={() => setIsGlobalQuantumOpen(false)} />
+
+      {/* Global Patient Chart Side Panel (used by Clinical Trials, Trending Research) */}
+      {isGlobalChartOpen && (
+        <>
+          <div
+            className={`fixed inset-0 bg-black/30 z-40 transition-opacity duration-300 ${isGlobalChartVisible ? "opacity-100" : "opacity-0"}`}
+            onClick={closeGlobalChart}
+          />
+          <div
+            className={`fixed top-0 right-0 h-full w-1/2 bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out ${isGlobalChartVisible ? "translate-x-0" : "translate-x-full"}`}
+          >
+            <PatientChartPage
+              selectedPatient={selectedPatient}
+              onBack={closeGlobalChart}
+            />
+          </div>
+        </>
+      )}
 
       <DoctorFeed
         isOpen={isDoctorFeedOpen}
