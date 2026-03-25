@@ -227,19 +227,19 @@ export default function DashboardPage({
         </div>
 
         {selectedPatient && activeAlerts.length > 0 && (
-          <div className="mb-8">
+          <div className="mb-8 rounded-2xl border border-amber-100 bg-amber-50/50 p-5">
             <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="w-4 h-4 text-indigo-600" />
-              <p className="text-sm font-semibold text-gray-900">Active Alerts</p>
+              <AlertTriangle className="w-4 h-4 text-amber-700" />
+              <h3 className="text-sm font-semibold text-amber-900">Active Alerts</h3>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-2">
               {activeAlerts.map((alert, idx) => (
-                <span
+                <div
                   key={idx}
-                  className="text-[14px] px-2 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200"
+                  className="rounded-lg border border-amber-200 bg-white px-4 py-3 text-sm text-gray-800 shadow-sm"
                 >
                   {alert}
-                </span>
+                </div>
               ))}
             </div>
           </div>
@@ -297,7 +297,8 @@ export default function DashboardPage({
 
         {selectedPatient && (
           <div className="mb-10 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-5">
-            <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="mb-3 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" aria-hidden />
               <h3 className="text-sm font-semibold text-indigo-900">AI Insights and Recommendations</h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
