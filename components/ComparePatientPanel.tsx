@@ -7,11 +7,12 @@ interface ComparePatientPanelProps {
   isOpen: boolean;
   onClose: () => void;
   currentPatient?: Patient;
+  selectedIds: Set<string>;
+  onSelectionChange: (ids: Set<string>) => void;
 }
 
-export default function ComparePatientPanel({ isOpen, onClose, currentPatient }: ComparePatientPanelProps) {
+export default function ComparePatientPanel({ isOpen, onClose, currentPatient, selectedIds, onSelectionChange }: ComparePatientPanelProps) {
   const [search, setSearch] = useState("");
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [diagnosisFilter, setDiagnosisFilter] = useState<string | null>(null);
   const [diagnosisOpen, setDiagnosisOpen] = useState(false);
 
@@ -37,27 +38,19 @@ export default function ComparePatientPanel({ isOpen, onClose, currentPatient }:
   const allSelected = filtered.length > 0 && filtered.every((p) => selectedIds.has(p.id));
 
   const togglePatient = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    const next = new Set(selectedIds);
+    next.has(id) ? next.delete(id) : next.add(id);
+    onSelectionChange(next);
   };
 
   const toggleAll = () => {
+    const next = new Set(selectedIds);
     if (allSelected) {
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        filtered.forEach((p) => next.delete(p.id));
-        return next;
-      });
+      filtered.forEach((p) => next.delete(p.id));
     } else {
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        filtered.forEach((p) => next.add(p.id));
-        return next;
-      });
+      filtered.forEach((p) => next.add(p.id));
     }
+    onSelectionChange(next);
   };
 
   const selectedPatients = patients.filter((p) => selectedIds.has(p.id));

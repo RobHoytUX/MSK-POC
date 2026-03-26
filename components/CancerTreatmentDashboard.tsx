@@ -23,7 +23,7 @@ import ComparePatientPanel from './ComparePatientPanel';
 import { useAuth } from '../lib/AuthContext';
 import ProfilePanel from './ProfilePanel';
 import NotificationsPanel from './NotificationsPanel';
-import { Patient } from '../lib/patients';
+import { Patient, patients } from '../lib/patients';
 import mapsWhiteLogo from '../src/assets/maps-white.png';
 
 interface TimelineEvent {
@@ -410,6 +410,12 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [pendingPostId, setPendingPostId] = useState<string | null>(null);
   const [isComparePatientOpen, setIsComparePatientOpen] = useState(false);
+  const [compareSelectedIds, setCompareSelectedIds] = useState<Set<string>>(new Set());
+  const [activeComparePatientId, setActiveComparePatientId] = useState<string | null>(null);
+  const compareSelectedPatients = useMemo(
+    () => patients.filter((p) => compareSelectedIds.has(p.id)),
+    [compareSelectedIds]
+  );
   const [isGlobalChartOpen, setIsGlobalChartOpen] = useState(false);
   const [isGlobalChartVisible, setIsGlobalChartVisible] = useState(false);
 
@@ -876,6 +882,9 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
             onDoctorFeedPostsChanged={bumpDoctorFeedRefresh}
             pendingDoctorFeedConnection={pendingDoctorFeedConnection}
             onConsumePendingDoctorFeedConnection={clearPendingDoctorFeedConnection}
+            comparePatients={compareSelectedPatients}
+            activeComparePatientId={activeComparePatientId}
+            onSetActiveComparePatient={setActiveComparePatientId}
           />
         ) : activeView === "dashboard" ? (
           <DashboardPage
@@ -936,6 +945,11 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
                         >
                           <Users className="w-3.5 h-3.5" />
                           Compare Patients
+                          {compareSelectedIds.size > 0 && (
+                            <span className="ml-0.5 w-4 h-4 flex items-center justify-center rounded-full bg-violet-600 text-white text-[10px] font-bold leading-none">
+                              {compareSelectedIds.size}
+                            </span>
+                          )}
                         </button>
                         <span className="text-gray-900 font-medium">{selectedPatient.name}</span>
                         <span className="text-gray-300" aria-hidden>·</span>
@@ -987,11 +1001,7 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
                   </div>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => {
-                        setChartBackView(activeView);
-                        setActiveView("patientChart");
-                        setShowKeywordsTree(false);
-                      }}
+                      onClick={openGlobalChart}
                       className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
                     >
                       <FileText className="w-4 h-4" />
@@ -1178,6 +1188,9 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
                   onFocusedNodeChange={setKeywordsNodeFocused}
                   pendingDoctorFeedConnection={pendingDoctorFeedConnection}
                   onConsumePendingDoctorFeedConnection={clearPendingDoctorFeedConnection}
+                  comparePatients={compareSelectedPatients}
+                  activeComparePatientId={activeComparePatientId}
+                  onSetActiveComparePatient={setActiveComparePatientId}
                 />
               </div>
             )}
@@ -1881,6 +1894,8 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
         isOpen={isComparePatientOpen}
         onClose={() => setIsComparePatientOpen(false)}
         currentPatient={selectedPatient}
+        selectedIds={compareSelectedIds}
+        onSelectionChange={setCompareSelectedIds}
       />
     </div>
   );

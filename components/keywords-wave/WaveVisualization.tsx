@@ -1,5 +1,7 @@
-import { useState, useRef, useEffect, useCallback, type MutableRefObject } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, type MutableRefObject } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import type { Patient } from '../../lib/patients';
+import { getPatientRelevantNodes } from '../../lib/patientNodeRelevance';
 import { ShareModal } from './ShareModal';
 import { SaveModal } from './SaveModal';
 import { QuantumPanel } from './QuantumPanel';
@@ -42,6 +44,9 @@ interface WaveVisualizationProps {
   /** When set (e.g. after navigating from Doctor Network), applied once then cleared via onConsume. */
   pendingDoctorFeedConnection?: PendingDoctorFeedConnection | null;
   onConsumePendingDoctorFeedConnection?: () => void;
+  comparePatients?: Patient[];
+  activeComparePatientId?: string | null;
+  onSetActiveComparePatient?: (id: string | null) => void;
 }
 
 const medicalData: Column[] = [
@@ -129,6 +134,9 @@ export function WaveVisualization({
   onDoctorFeedPostsChanged,
   pendingDoctorFeedConnection,
   onConsumePendingDoctorFeedConnection,
+  comparePatients = [],
+  activeComparePatientId = null,
+  onSetActiveComparePatient,
 }: WaveVisualizationProps) {
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set());
@@ -150,6 +158,25 @@ export function WaveVisualization({
   const [notesTarget, setNotesTarget] = useState<{ type: 'node' | 'connection'; id: string; title: string } | null>(null);
   const [nodeNotes, setNodeNotes] = useState<Record<string, string>>({});
   const [connectionNotes, setConnectionNotes] = useState<Record<string, string>>({});
+
+  // Compare patients: node relevance
+  const activeComparePatient = useMemo(
+    () => comparePatients.find((p) => p.id === activeComparePatientId) ?? null,
+    [comparePatients, activeComparePatientId]
+  );
+  const activePatientRelevantNodes = useMemo(
+    () => (activeComparePatient ? getPatientRelevantNodes(activeComparePatient) : null),
+    [activeComparePatient]
+  );
+  // Per-patient relevance for the hovered node (for badge bar dimming)
+  const hoveredNodePatientRelevance = useMemo(() => {
+    if (!hoveredNode || comparePatients.length === 0) return null;
+    const map: Record<string, boolean> = {};
+    comparePatients.forEach((p) => {
+      map[p.id] = getPatientRelevantNodes(p).has(hoveredNode);
+    });
+    return map;
+  }, [hoveredNode, comparePatients]);
   const [comments, setComments] = useState([
     {
       id: 1,
@@ -657,8 +684,61 @@ export function WaveVisualization({
     return visibleNodes;
   };
 
+  const inCompareMode = comparePatients.length > 0;
+
   return (
-    <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 overflow-auto relative">
+    <div className="w-full h-full flex flex-col">
+
+    {/* Patient compare badge bar */}
+    {inCompareMode && (
+      <div className="shrink-0 px-4 py-2.5 bg-white border-b border-gray-200 shadow-sm flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-gray-500 shrink-0">Viewing:</span>
+
+        {/* All patients chip */}
+        <button
+          type="button"
+          onClick={() => onSetActiveComparePatient?.(null)}
+          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all ${
+            activeComparePatientId === null
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          All Patients
+          <span className="opacity-70">({comparePatients.length})</span>
+        </button>
+
+        {/* Per-patient chips */}
+        {comparePatients.map((patient) => {
+          const isActive = activeComparePatientId === patient.id;
+          const hasHoveredNode = hoveredNodePatientRelevance
+            ? hoveredNodePatientRelevance[patient.id]
+            : true;
+          const initials = patient.name.split(' ').map((n) => n[0]).join('');
+          const firstName = patient.name.split(' ')[0];
+          return (
+            <button
+              key={patient.id}
+              type="button"
+              onClick={() => onSetActiveComparePatient?.(isActive ? null : patient.id)}
+              title={patient.name}
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                isActive
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              } ${hoveredNodePatientRelevance && !hasHoveredNode ? 'opacity-30' : 'opacity-100'}`}
+            >
+              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${isActive ? 'bg-white/30 text-white' : 'bg-indigo-200 text-indigo-700'}`}>
+                {initials}
+              </span>
+              {firstName}
+            </button>
+          );
+        })}
+      </div>
+    )}
+
+    <div className="flex-1 bg-gradient-to-br from-gray-50 to-gray-100 overflow-auto relative min-h-0">
       <div className="min-w-[1200px] h-full relative flex">
         {/* Main Content Area */}
         <div className={`flex-1 transition-all duration-150 ${focusedNode ? 'mr-[440px]' : ''}`}>
@@ -1040,6 +1120,7 @@ export function WaveVisualization({
                             getConnections(hoveredNode).includes(node.id) : false;
                           const isConnected = isNodeConnected(node.id);
                           const isDisabled = hoveredNode && !isConnected;
+                          const isCompareFiltered = activePatientRelevantNodes !== null && !activePatientRelevantNodes.has(node.id);
                           const columnColor = getColumnColor(columnIndex);
                           
                           const prevNodesCount = medicalData.slice(0, columnIndex).reduce((sum, col) => sum + col.nodes.length, 0);
@@ -1058,6 +1139,7 @@ export function WaveVisualization({
                               onClick={() => handleNodeClick(node.id)}
                               onContextMenu={(e) => handleNodeRightClick(e, node.id, node.label)}
                               className="cursor-pointer"
+                              style={{ opacity: isCompareFiltered ? 0.2 : 1 }}
                             >
                               <rect
                                 x={pos.x}
@@ -1183,12 +1265,13 @@ export function WaveVisualization({
                           {sortedNodes.map((visNode, index) => {
                             const pos = getHorizontalPosition(index, sortedNodes.length);
                             const columnColor = getColumnColor(visNode.columnIndex);
+                            const isFocusedCompareFiltered = activePatientRelevantNodes !== null && !visNode.isFocused && !activePatientRelevantNodes.has(visNode.id);
 
                             return (
                               <motion.g
                                 key={`${visNode.id}-${svgWidth}`}
                                 initial={{ scale: 0, opacity: 0 }}
-                                animate={{ scale: 1, opacity: 1, x: pos.x - columnWidth / 2, y: pos.y - nodeHeight / 2 }}
+                                animate={{ scale: 1, opacity: isFocusedCompareFiltered ? 0.2 : 1, x: pos.x - columnWidth / 2, y: pos.y - nodeHeight / 2 }}
                                 exit={{ scale: 0, opacity: 0 }}
                                 transition={{ 
                                   duration: 0.12, 
@@ -1539,6 +1622,7 @@ export function WaveVisualization({
         onSave={handleSaveNotes}
       />
 
+    </div>
     </div>
   );
 }
