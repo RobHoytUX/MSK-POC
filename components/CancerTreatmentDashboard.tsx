@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays, Bell, SlidersHorizontal, Layers3, Stethoscope, Microscope, UserRound, UsersRound } from "lucide-react";
+import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays, Bell, SlidersHorizontal, Layers3, Stethoscope, Microscope, UserRound, UsersRound, Users } from "lucide-react";
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -19,6 +19,7 @@ import {
   type DoctorFeedCanvasBridge,
   type PendingDoctorFeedConnection,
 } from './keywords-wave';
+import ComparePatientPanel from './ComparePatientPanel';
 import { useAuth } from '../lib/AuthContext';
 import ProfilePanel from './ProfilePanel';
 import NotificationsPanel from './NotificationsPanel';
@@ -408,6 +409,7 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [pendingPostId, setPendingPostId] = useState<string | null>(null);
+  const [isComparePatientOpen, setIsComparePatientOpen] = useState(false);
   const [isGlobalChartOpen, setIsGlobalChartOpen] = useState(false);
   const [isGlobalChartVisible, setIsGlobalChartVisible] = useState(false);
 
@@ -927,6 +929,14 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
                             Change Patient
                           </button>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => setIsComparePatientOpen(true)}
+                          className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-violet-50 hover:bg-violet-100 text-violet-700 text-sm font-medium border border-violet-200 transition-colors mr-1"
+                        >
+                          <Users className="w-3.5 h-3.5" />
+                          Compare Patients
+                        </button>
                         <span className="text-gray-900 font-medium">{selectedPatient.name}</span>
                         <span className="text-gray-300" aria-hidden>·</span>
                         <span>{selectedPatient.age}yo {selectedPatient.gender} · {selectedPatient.diagnoses[0]} · {selectedPatient.mrn}</span>
@@ -1865,6 +1875,12 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
           setReaderArticle(null);
         }}
         article={readerArticle}
+      />
+
+      <ComparePatientPanel
+        isOpen={isComparePatientOpen}
+        onClose={() => setIsComparePatientOpen(false)}
+        currentPatient={selectedPatient}
       />
     </div>
   );
