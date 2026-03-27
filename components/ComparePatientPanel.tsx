@@ -53,8 +53,6 @@ export default function ComparePatientPanel({ isOpen, onClose, currentPatient, s
     onSelectionChange(next);
   };
 
-  const selectedPatients = patients.filter((p) => selectedIds.has(p.id));
-
   const handleCompare = () => {
     onClose();
   };
