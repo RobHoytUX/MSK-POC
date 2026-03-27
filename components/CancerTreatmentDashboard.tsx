@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays, Bell, SlidersHorizontal, Layers3, Stethoscope, Microscope, UserRound, UsersRound, Users } from "lucide-react";
+import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays, Bell, SlidersHorizontal, Layers3, Stethoscope, Microscope, UserRound, UsersRound, Users, PanelRightOpen } from "lucide-react";
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -20,6 +20,7 @@ import {
   type PendingDoctorFeedConnection,
 } from './keywords-wave';
 import ComparePatientPanel from './ComparePatientPanel';
+import PatientComparisonView from './PatientComparisonView';
 import { useAuth } from '../lib/AuthContext';
 import ProfilePanel from './ProfilePanel';
 import NotificationsPanel from './NotificationsPanel';
@@ -410,6 +411,7 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [pendingPostId, setPendingPostId] = useState<string | null>(null);
   const [isComparePatientOpen, setIsComparePatientOpen] = useState(false);
+  const [isComparisonViewOpen, setIsComparisonViewOpen] = useState(false);
   const [compareSelectedIds, setCompareSelectedIds] = useState<Set<string>>(new Set());
   const [activeComparePatientId, setActiveComparePatientId] = useState<string | null>(null);
   const compareSelectedPatients = useMemo(
@@ -1000,6 +1002,15 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
                     ))}
                   </div>
                   <div className="flex items-center gap-2">
+                    {compareSelectedPatients.length >= 2 && (
+                      <button
+                        onClick={() => setIsComparisonViewOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full transition-colors"
+                      >
+                        <PanelRightOpen className="w-4 h-4" />
+                        Side by Side
+                      </button>
+                    )}
                     <button
                       onClick={openGlobalChart}
                       className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
@@ -1896,6 +1907,12 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
         currentPatient={selectedPatient}
         selectedIds={compareSelectedIds}
         onSelectionChange={setCompareSelectedIds}
+      />
+
+      <PatientComparisonView
+        isOpen={isComparisonViewOpen}
+        onClose={() => setIsComparisonViewOpen(false)}
+        patients={compareSelectedPatients}
       />
     </div>
   );

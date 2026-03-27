@@ -56,8 +56,7 @@ export default function ComparePatientPanel({ isOpen, onClose, currentPatient, s
   const selectedPatients = patients.filter((p) => selectedIds.has(p.id));
 
   const handleCompare = () => {
-    // Placeholder — wire to comparison view in a future iteration
-    alert(`Comparing ${selectedPatients.length} patient${selectedPatients.length !== 1 ? "s" : ""}: ${selectedPatients.map((p) => p.name).join(", ")}`);
+    onClose();
   };
 
   return (
