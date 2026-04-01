@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays, Bell, SlidersHorizontal, Layers3, Stethoscope, Microscope, UserRound, UsersRound, Users, PanelRightOpen } from "lucide-react";
+import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays, Bell, SlidersHorizontal, Layers3, Stethoscope, Microscope, UserRound, UsersRound, Users, PanelRightOpen, ListFilter } from "lucide-react";
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -21,6 +21,8 @@ import {
 } from './keywords-wave';
 import ComparePatientPanel from './ComparePatientPanel';
 import PatientComparisonView from './PatientComparisonView';
+import TrialQualificationPanel from './TrialQualificationPanel';
+import CriteriaMatchingPanel from './CriteriaMatchingPanel';
 import { useAuth } from '../lib/AuthContext';
 import ProfilePanel from './ProfilePanel';
 import NotificationsPanel from './NotificationsPanel';
@@ -412,6 +414,9 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
   const [pendingPostId, setPendingPostId] = useState<string | null>(null);
   const [isComparePatientOpen, setIsComparePatientOpen] = useState(false);
   const [isComparisonViewOpen, setIsComparisonViewOpen] = useState(false);
+  const [isQualificationPanelOpen, setIsQualificationPanelOpen] = useState(false);
+  const [qualificationPanelPatient, setQualificationPanelPatient] = useState<import('../lib/patients').Patient | undefined>(undefined);
+  const [isCriteriaMatchingOpen, setIsCriteriaMatchingOpen] = useState(false);
   const [compareSelectedIds, setCompareSelectedIds] = useState<Set<string>>(new Set());
   const [activeComparePatientId, setActiveComparePatientId] = useState<string | null>(null);
   const compareSelectedPatients = useMemo(
@@ -857,6 +862,17 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
           </svg>
         </button>
 
+        <button
+          type="button"
+          onClick={() => setIsCriteriaMatchingOpen((v) => !v)}
+          className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+            isCriteriaMatchingOpen ? "bg-white shadow-lg scale-105" : "bg-white/10 hover:bg-white/20 hover:scale-110"
+          }`}
+          title="Trial Patient Matching"
+        >
+          <ListFilter className={`w-6 h-6 ${isCriteriaMatchingOpen ? "text-indigo-600" : "text-white"}`} />
+        </button>
+
         <div ref={scopePickerRef} className="relative">
           <button
             onClick={() => setIsScopePickerOpen((prev) => !prev)}
@@ -909,6 +925,10 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
                 focusTrialId: opts?.trialId ?? null,
               });
               setActiveView("trials");
+            }}
+            onViewQualificationReport={() => {
+              setQualificationPanelPatient(selectedPatient);
+              setIsQualificationPanelOpen(true);
             }}
           />
         ) : activeView === "patientChart" ? (
@@ -1913,6 +1933,26 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
         isOpen={isComparisonViewOpen}
         onClose={() => setIsComparisonViewOpen(false)}
         patients={compareSelectedPatients}
+      />
+
+      <CriteriaMatchingPanel
+        isOpen={isCriteriaMatchingOpen}
+        onClose={() => setIsCriteriaMatchingOpen(false)}
+        onViewPatientQualification={(patient) => {
+          setQualificationPanelPatient(patient);
+          setIsQualificationPanelOpen(true);
+        }}
+      />
+
+      <TrialQualificationPanel
+        isOpen={isQualificationPanelOpen}
+        onClose={() => setIsQualificationPanelOpen(false)}
+        patient={qualificationPanelPatient ?? selectedPatient}
+        onOpenTrials={() => {
+          setIsQualificationPanelOpen(false);
+          setClinicalTrialsNav({ listTab: "qualified", focusTrialId: null });
+          setActiveView("trials");
+        }}
       />
     </div>
   );

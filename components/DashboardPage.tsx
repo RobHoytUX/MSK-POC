@@ -16,6 +16,7 @@ interface DashboardPageProps {
   /** Opens Clinical Trials; defaults to the Qualified tab unless `listTab` is `"all"`. */
   onOpenClinicalTrials?: (opts?: { trialId?: string; listTab?: "all" | "qualified" }) => void;
   onOpenNewsFeed?: () => void;
+  onViewQualificationReport?: () => void;
 }
 
 const cards = [
@@ -55,6 +56,7 @@ export default function DashboardPage({
   onAskAI,
   onOpenClinicalTrials,
   onOpenNewsFeed,
+  onViewQualificationReport,
 }: DashboardPageProps) {
   const { profile, user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
@@ -279,52 +281,53 @@ export default function DashboardPage({
           </div>
         )}
 
-        {selectedPatient && onOpenClinicalTrials && (
+        {selectedPatient && (onOpenClinicalTrials || onViewQualificationReport) && (
           <div className="mb-8 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <FlaskConical className="w-4 h-4 text-emerald-700" />
-              <h3 className="text-sm font-semibold text-emerald-900">Clinical trial qualification</h3>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <FlaskConical className="w-4 h-4 text-emerald-700" />
+                <h3 className="text-sm font-semibold text-emerald-900">Pembrolizumab (Keytruda®) Qualification</h3>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-semibold uppercase tracking-wide">
+                PD-1 Checkpoint Inhibitor
+              </span>
             </div>
+
             {qualifiedTrialsForUi.length > 0 ? (
               <>
-                <p className="text-sm text-gray-800 mb-3">
-                  This patient is flagged as potentially qualified for{" "}
-                  <span className="font-semibold">{qualifiedTrialsForUi.length}</span> demo trial
-                  {qualifiedTrialsForUi.length !== 1 ? "s" : ""} based on diagnosis rules.
+                <p className="text-sm text-gray-800 mb-4">
+                  <strong>{selectedPatient.name}</strong> has been evaluated against Keytruda eligibility criteria
+                  and is potentially qualified for{" "}
+                  <span className="font-semibold text-emerald-700">{qualifiedTrialsForUi.length}</span> active trial
+                  {qualifiedTrialsForUi.length !== 1 ? "s" : ""}. Review the full qualification report for detailed criteria breakdown.
                 </p>
-                <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
-                  {qualifiedTrialsForUi.map((trial) => (
-                    <button
-                      key={trial.id}
-                      type="button"
-                      onClick={() => onOpenClinicalTrials({ trialId: trial.id })}
-                      className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors"
-                    >
-                      Open {trial.nctId}
-                    </button>
-                  ))}
+                {onViewQualificationReport && (
                   <button
                     type="button"
-                    onClick={() => onOpenClinicalTrials()}
-                    className="inline-flex items-center justify-center px-4 py-2 rounded-full border border-emerald-600 text-emerald-800 hover:bg-emerald-100 text-sm font-medium transition-colors"
+                    onClick={onViewQualificationReport}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium transition-colors"
                   >
-                    View all qualified trials
+                    <FileText className="w-4 h-4" />
+                    View Qualification Report
                   </button>
-                </div>
+                )}
               </>
             ) : (
-              <div className="space-y-3">
-                <p className="text-sm text-gray-700">
-                  No matching demo clinical trials for this patient&apos;s current diagnoses.
+              <>
+                <p className="text-sm text-gray-700 mb-4">
+                  No exact trial match for current diagnoses. A Keytruda qualification assessment may still reveal eligibility.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => onOpenClinicalTrials({ listTab: "all" })}
-                  className="inline-flex items-center justify-center px-4 py-2 rounded-full bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium transition-colors"
-                >
-                  Browse all trials
-                </button>
-              </div>
+                {onViewQualificationReport && (
+                  <button
+                    type="button"
+                    onClick={onViewQualificationReport}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium transition-colors"
+                  >
+                    <FileText className="w-4 h-4" />
+                    View Qualification Report
+                  </button>
+                )}
+              </>
             )}
           </div>
         )}
