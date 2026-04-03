@@ -4,6 +4,8 @@ import type { Patient } from '../../lib/patients';
 import { getPatientRelevantNodes } from '../../lib/patientNodeRelevance';
 import { medicalData as sharedMedicalData, type GraphNode } from '../../lib/medicalGraphData';
 import { KEYTRUDA_TRIAL_NODE_IDS } from '../../lib/keytrudaEligibility';
+import { keytrudaFdaKeywords, keywordNodeMap, type FdaKeyword } from '../../lib/keytrudaFdaKeywords';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { ShareModal } from './ShareModal';
 import { SaveModal } from './SaveModal';
 import { QuantumPanel } from './QuantumPanel';
@@ -68,6 +70,7 @@ export function WaveVisualization({
   const [isRecording, setIsRecording] = useState(false);
   const [showVoicePopup, setShowVoicePopup] = useState(false);
   const [showQuantumPanel, setShowQuantumPanel] = useState(false);
+  const [selectedFdaKeywordId, setSelectedFdaKeywordId] = useState<string | null>(null);
   const [postToFeedModalOpen, setPostToFeedModalOpen] = useState(false);
   const [savedCanvasState, setSavedCanvasState] = useState<{ focusedNode: string | null; selectedNodes: Set<string> } | null>(null);
   const [doctorConnectionInfo, setDoctorConnectionInfo] = useState<{ name: string; avatar: string; specialty: string; postTitle: string; doctorId: number; postId: number } | null>(null);
@@ -663,6 +666,64 @@ export function WaveVisualization({
       </div>
     )}
 
+    {/* FDA Label Keyword Strip — shown in clinical trial mode */}
+    {clinicalTrialMode && comparePatients.length > 0 && (
+      <div className="shrink-0 px-4 py-2 bg-violet-50 border-b border-violet-200 flex flex-wrap items-center gap-1.5">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-violet-500 shrink-0 mr-1">
+          BLA 125514 Keywords
+        </span>
+        {selectedFdaKeywordId && (
+          <button
+            type="button"
+            onClick={() => setSelectedFdaKeywordId(null)}
+            className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-violet-200 text-violet-800 hover:bg-violet-300 transition-colors font-medium"
+          >
+            ✕ Clear
+          </button>
+        )}
+        {keytrudaFdaKeywords.map((kw) => {
+          const isActive = selectedFdaKeywordId === kw.id;
+          const colorMap: Record<FdaKeyword['color'], string> = {
+            indigo:  isActive ? 'bg-indigo-600 text-white border-indigo-600'  : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100',
+            violet:  isActive ? 'bg-violet-600 text-white border-violet-600'  : 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100',
+            purple:  isActive ? 'bg-purple-600 text-white border-purple-600'  : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100',
+            emerald: isActive ? 'bg-emerald-600 text-white border-emerald-600': 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100',
+            amber:   isActive ? 'bg-amber-500 text-white border-amber-500'    : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100',
+            cyan:    isActive ? 'bg-cyan-600 text-white border-cyan-600'      : 'bg-cyan-50 text-cyan-700 border-cyan-200 hover:bg-cyan-100',
+            rose:    isActive ? 'bg-rose-600 text-white border-rose-600'      : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100',
+            blue:    isActive ? 'bg-blue-600 text-white border-blue-600'      : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100',
+          };
+          return (
+            <Popover key={kw.id}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => setSelectedFdaKeywordId(isActive ? null : kw.id)}
+                  className={`text-[11px] px-2.5 py-1 rounded-full border font-medium transition-all ${colorMap[kw.color]}`}
+                >
+                  {kw.label}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80" side="bottom" align="start">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-900">{kw.label}</span>
+                    <span className="text-[10px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded font-medium">
+                      {kw.category}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 leading-relaxed">{kw.description}</p>
+                  <p className="text-[10px] text-violet-600 font-medium">
+                    Highlights {kw.relatedNodeIds.length} node{kw.relatedNodeIds.length !== 1 ? 's' : ''} on canvas
+                  </p>
+                </div>
+              </PopoverContent>
+            </Popover>
+          );
+        })}
+      </div>
+    )}
+
     <div className="flex-1 bg-gradient-to-br from-gray-50 to-gray-100 overflow-auto relative min-h-0">
       <div className="min-w-[1200px] h-full relative flex">
         {/* Main Content Area */}
@@ -1045,8 +1106,9 @@ export function WaveVisualization({
                             getConnections(hoveredNode).includes(node.id) : false;
                           const isConnected = isNodeConnected(node.id);
                           const isDisabled = hoveredNode && !isConnected;
-                          // Clinical trial mode: when no single patient selected, dim non-trial nodes
-                          const effectiveRelevantNodes = activePatientRelevantNodes ?? (clinicalTrialMode && comparePatients.length > 0 ? KEYTRUDA_TRIAL_NODE_IDS : null);
+                          // FDA keyword selected → use that keyword's nodes; else CT mode → trial nodes; else patient filter
+                          const fdaKeywordNodes = selectedFdaKeywordId ? keywordNodeMap.get(selectedFdaKeywordId) ?? null : null;
+                          const effectiveRelevantNodes = fdaKeywordNodes ?? activePatientRelevantNodes ?? (clinicalTrialMode && comparePatients.length > 0 ? KEYTRUDA_TRIAL_NODE_IDS : null);
                           const isCompareFiltered = effectiveRelevantNodes !== null && !effectiveRelevantNodes.has(node.id);
                           const columnColor = getColumnColor(columnIndex);
                           
@@ -1192,7 +1254,8 @@ export function WaveVisualization({
                           {sortedNodes.map((visNode, index) => {
                             const pos = getHorizontalPosition(index, sortedNodes.length);
                             const columnColor = getColumnColor(visNode.columnIndex);
-                            const effectiveFocusedNodes = activePatientRelevantNodes ?? (clinicalTrialMode && comparePatients.length > 0 ? KEYTRUDA_TRIAL_NODE_IDS : null);
+                            const fdaFocusedKwNodes = selectedFdaKeywordId ? keywordNodeMap.get(selectedFdaKeywordId) ?? null : null;
+                            const effectiveFocusedNodes = fdaFocusedKwNodes ?? activePatientRelevantNodes ?? (clinicalTrialMode && comparePatients.length > 0 ? KEYTRUDA_TRIAL_NODE_IDS : null);
                             const isFocusedCompareFiltered = effectiveFocusedNodes !== null && !visNode.isFocused && !effectiveFocusedNodes.has(visNode.id);
 
                             return (
