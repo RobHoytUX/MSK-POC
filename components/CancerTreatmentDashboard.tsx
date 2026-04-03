@@ -419,6 +419,7 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
   const [isCriteriaMatchingOpen, setIsCriteriaMatchingOpen] = useState(false);
   const [compareSelectedIds, setCompareSelectedIds] = useState<Set<string>>(new Set());
   const [activeComparePatientId, setActiveComparePatientId] = useState<string | null>(null);
+  const [compareIsClinicalTrialMode, setCompareIsClinicalTrialMode] = useState(false);
   const compareSelectedPatients = useMemo(
     () => patients.filter((p) => compareSelectedIds.has(p.id)),
     [compareSelectedIds]
@@ -903,6 +904,7 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
             comparePatients={compareSelectedPatients}
             activeComparePatientId={activeComparePatientId}
             onSetActiveComparePatient={setActiveComparePatientId}
+            clinicalTrialMode={compareIsClinicalTrialMode}
           />
         ) : activeView === "dashboard" ? (
           <DashboardPage
@@ -1222,6 +1224,7 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
                   comparePatients={compareSelectedPatients}
                   activeComparePatientId={activeComparePatientId}
                   onSetActiveComparePatient={setActiveComparePatientId}
+                  clinicalTrialMode={compareIsClinicalTrialMode}
                 />
               </div>
             )}
@@ -1927,6 +1930,7 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
         currentPatient={selectedPatient}
         selectedIds={compareSelectedIds}
         onSelectionChange={setCompareSelectedIds}
+        onCompare={(ctMode) => setCompareIsClinicalTrialMode(ctMode)}
       />
 
       <PatientComparisonView

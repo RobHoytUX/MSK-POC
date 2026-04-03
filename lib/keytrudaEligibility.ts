@@ -300,6 +300,26 @@ export const keytrudaCriteria: EligibilityCriterion[] = [
   },
 ];
 
+// ─── Trial-relevant keyword graph nodes ───────────────────────────────────────
+// Maps NCT01295827 criteria directly to medicalData node IDs
+
+export const KEYTRUDA_TRIAL_NODE_IDS = new Set([
+  'sub-1',   // Cancer Diagnosis          → Inclusion #1
+  'sub-2',   // Stage Information         → Inclusion #1 (progression/staging)
+  'sub-3',   // Genetic Markers           → Biomarkers (BRCA, MSI-H)
+  'sub-4',   // Prior Chemotherapy        → Inclusion #2 (prior therapy failure)
+  'treat-1', // Chemotherapy             → Exclusion #1 (washout period)
+  'treat-3', // Radiation                → Exclusion #1 (washout period)
+  'treat-6', // Immunotherapy            → Core treatment (Keytruda)
+  'biom-4',  // PD-L1 Status             → Key biomarker
+  'biom-1',  // ER+/PR+ HER2-            → HER2 status (inclusion/exclusion)
+  'biom-3',  // Ki-67 Index              → Tumor proliferation biomarker
+  'mon-3',   // Clinical Trials          → Trial enrollment
+  'pd-3',    // Treatment History        → Inclusion #2 (prior therapy)
+  'pd-5',    // Comorbidities            → Exclusion (autoimmune conditions)
+  'spec-2',  // BRCA Negative            → Genetic biomarker
+]);
+
 // ─── Qualifying trials ────────────────────────────────────────────────────────
 
 const keytrudaTrials = [

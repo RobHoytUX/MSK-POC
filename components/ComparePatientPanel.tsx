@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Search, Users, Check, ChevronDown, ChevronUp } from "lucide-react";
+import { X, Search, Users, Check, ChevronDown, ChevronUp, FlaskConical } from "lucide-react";
 import { Patient, patients } from "../lib/patients";
+import { evaluateKeytrudaQualification } from "../lib/keytrudaEligibility";
 
 interface ComparePatientPanelProps {
   isOpen: boolean;
@@ -9,12 +10,24 @@ interface ComparePatientPanelProps {
   currentPatient?: Patient;
   selectedIds: Set<string>;
   onSelectionChange: (ids: Set<string>) => void;
+  onCompare?: (clinicalTrialMode: boolean) => void;
 }
 
-export default function ComparePatientPanel({ isOpen, onClose, currentPatient, selectedIds, onSelectionChange }: ComparePatientPanelProps) {
+export default function ComparePatientPanel({ isOpen, onClose, currentPatient, selectedIds, onSelectionChange, onCompare }: ComparePatientPanelProps) {
   const [search, setSearch] = useState("");
   const [diagnosisFilter, setDiagnosisFilter] = useState<string | null>(null);
   const [diagnosisOpen, setDiagnosisOpen] = useState(false);
+  const [ctFilterActive, setCtFilterActive] = useState(false);
+
+  // Pre-compute Keytruda qualification for every patient
+  const qualificationMap = useMemo(() => {
+    const map = new Map<string, boolean>();
+    patients.forEach((p) => {
+      const q = evaluateKeytrudaQualification(p);
+      map.set(p.id, q.overallStatus === 'qualified' || q.overallStatus === 'likely_qualified');
+    });
+    return map;
+  }, []);
 
   const allDiagnoses = useMemo(() => {
     const set = new Set<string>();
@@ -31,9 +44,10 @@ export default function ComparePatientPanel({ isOpen, onClose, currentPatient, s
         p.mrn.toLowerCase().includes(q) ||
         p.diagnoses.some((d) => d.toLowerCase().includes(q));
       const matchesDx = !diagnosisFilter || p.diagnoses.includes(diagnosisFilter);
-      return matchesSearch && matchesDx;
+      const matchesCt = !ctFilterActive || qualificationMap.get(p.id) === true;
+      return matchesSearch && matchesDx && matchesCt;
     });
-  }, [search, diagnosisFilter]);
+  }, [search, diagnosisFilter, ctFilterActive, qualificationMap]);
 
   const allSelected = filtered.length > 0 && filtered.every((p) => selectedIds.has(p.id));
 
@@ -54,6 +68,7 @@ export default function ComparePatientPanel({ isOpen, onClose, currentPatient, s
   };
 
   const handleCompare = () => {
+    onCompare?.(ctFilterActive);
     onClose();
   };
 
@@ -161,6 +176,28 @@ export default function ComparePatientPanel({ isOpen, onClose, currentPatient, s
                 )}
               </div>
 
+              {/* Clinical Trial Qualified filter */}
+              <button
+                type="button"
+                onClick={() => setCtFilterActive((v) => !v)}
+                className={`w-full flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
+                  ctFilterActive
+                    ? "border-violet-500 bg-violet-50 text-violet-700 shadow-sm"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-violet-300 hover:bg-violet-50/50"
+                }`}
+              >
+                <FlaskConical className={`w-4 h-4 ${ctFilterActive ? "text-violet-600" : "text-gray-400"}`} />
+                <span>Clinical Trial Qualified</span>
+                <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-semibold ${
+                  ctFilterActive ? "bg-violet-600 text-white" : "bg-gray-100 text-gray-500"
+                }`}>
+                  Keytruda®
+                </span>
+                {ctFilterActive && (
+                  <Check className="w-4 h-4 text-violet-600 shrink-0" />
+                )}
+              </button>
+
               {/* Select all row */}
               <div className="flex items-center justify-between">
                 <button
@@ -232,6 +269,11 @@ export default function ComparePatientPanel({ isOpen, onClose, currentPatient, s
                           <span className="text-sm font-medium text-gray-900">{p.name}</span>
                           {isCurrent && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-600 text-white font-medium">Current</span>
+                          )}
+                          {qualificationMap.get(p.id) && !isCurrent && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-200 font-medium">
+                              Keytruda Qualified
+                            </span>
                           )}
                         </div>
                         <p className="text-xs text-gray-500 mt-0.5">

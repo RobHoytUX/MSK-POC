@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import type { Patient } from '../../lib/patients';
 import { getPatientRelevantNodes } from '../../lib/patientNodeRelevance';
 import { medicalData as sharedMedicalData, type GraphNode } from '../../lib/medicalGraphData';
+import { KEYTRUDA_TRIAL_NODE_IDS } from '../../lib/keytrudaEligibility';
 import { ShareModal } from './ShareModal';
 import { SaveModal } from './SaveModal';
 import { QuantumPanel } from './QuantumPanel';
@@ -36,6 +37,7 @@ interface WaveVisualizationProps {
   comparePatients?: Patient[];
   activeComparePatientId?: string | null;
   onSetActiveComparePatient?: (id: string | null) => void;
+  clinicalTrialMode?: boolean;
 }
 
 const medicalData = sharedMedicalData;
@@ -51,6 +53,7 @@ export function WaveVisualization({
   comparePatients = [],
   activeComparePatientId = null,
   onSetActiveComparePatient,
+  clinicalTrialMode = false,
 }: WaveVisualizationProps) {
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set());
@@ -606,7 +609,14 @@ export function WaveVisualization({
     {/* Patient compare badge bar */}
     {inCompareMode && (
       <div className="shrink-0 px-4 py-2.5 bg-white border-b border-gray-200 shadow-sm flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-gray-500 shrink-0">Viewing:</span>
+        {clinicalTrialMode ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-violet-600 text-white shrink-0 shadow-sm">
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+            Keytruda Trial
+          </span>
+        ) : (
+          <span className="text-xs font-medium text-gray-500 shrink-0">Viewing:</span>
+        )}
 
         {/* All patients chip */}
         <button
@@ -1035,7 +1045,9 @@ export function WaveVisualization({
                             getConnections(hoveredNode).includes(node.id) : false;
                           const isConnected = isNodeConnected(node.id);
                           const isDisabled = hoveredNode && !isConnected;
-                          const isCompareFiltered = activePatientRelevantNodes !== null && !activePatientRelevantNodes.has(node.id);
+                          // Clinical trial mode: when no single patient selected, dim non-trial nodes
+                          const effectiveRelevantNodes = activePatientRelevantNodes ?? (clinicalTrialMode && comparePatients.length > 0 ? KEYTRUDA_TRIAL_NODE_IDS : null);
+                          const isCompareFiltered = effectiveRelevantNodes !== null && !effectiveRelevantNodes.has(node.id);
                           const columnColor = getColumnColor(columnIndex);
                           
                           const prevNodesCount = medicalData.slice(0, columnIndex).reduce((sum, col) => sum + col.nodes.length, 0);
@@ -1180,7 +1192,8 @@ export function WaveVisualization({
                           {sortedNodes.map((visNode, index) => {
                             const pos = getHorizontalPosition(index, sortedNodes.length);
                             const columnColor = getColumnColor(visNode.columnIndex);
-                            const isFocusedCompareFiltered = activePatientRelevantNodes !== null && !visNode.isFocused && !activePatientRelevantNodes.has(visNode.id);
+                            const effectiveFocusedNodes = activePatientRelevantNodes ?? (clinicalTrialMode && comparePatients.length > 0 ? KEYTRUDA_TRIAL_NODE_IDS : null);
+                            const isFocusedCompareFiltered = effectiveFocusedNodes !== null && !visNode.isFocused && !effectiveFocusedNodes.has(visNode.id);
 
                             return (
                               <motion.g
