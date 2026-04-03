@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   X, CheckCircle2, XCircle, HelpCircle, ChevronRight,
   FlaskConical, ShieldCheck, AlertTriangle, Dna, Pill,
-  Stethoscope, Scale, Users, Info, ChevronDown, ChevronUp,
+  Scale, Info, ChevronDown, ChevronUp,
   ExternalLink
 } from "lucide-react";
 import type { Patient } from "../lib/patients";
@@ -21,22 +21,22 @@ interface TrialQualificationPanelProps {
 }
 
 const categoryIcons: Record<string, React.ReactNode> = {
-  "Demographics":                    <Users className="w-4 h-4" />,
-  "Disease Characteristics":         <Stethoscope className="w-4 h-4" />,
+  "NCT01295827 — Inclusion #1":      <FlaskConical className="w-4 h-4" />,
+  "NCT01295827 — Inclusion #2":      <FlaskConical className="w-4 h-4" />,
+  "NCT01295827 — Exclusion #1":      <AlertTriangle className="w-4 h-4" />,
+  "NCT01295827 — Exclusion #2":      <AlertTriangle className="w-4 h-4" />,
   "Clinical Status":                 <ShieldCheck className="w-4 h-4" />,
-  "Biomarkers (FDA BEST Framework)": <Dna className="w-4 h-4" />,
   "Treatment & Medication History":  <Pill className="w-4 h-4" />,
-  "Functional & Cognitive Status":   <FlaskConical className="w-4 h-4" />,
   "Ethical & Regulatory":            <Scale className="w-4 h-4" />,
 };
 
 const categoryColors: Record<string, string> = {
-  "Demographics":                    "text-blue-600 bg-blue-50 border-blue-100",
-  "Disease Characteristics":         "text-indigo-600 bg-indigo-50 border-indigo-100",
+  "NCT01295827 — Inclusion #1":      "text-indigo-700 bg-indigo-50 border-indigo-200",
+  "NCT01295827 — Inclusion #2":      "text-indigo-700 bg-indigo-50 border-indigo-200",
+  "NCT01295827 — Exclusion #1":      "text-red-700 bg-red-50 border-red-200",
+  "NCT01295827 — Exclusion #2":      "text-red-700 bg-red-50 border-red-200",
   "Clinical Status":                 "text-emerald-600 bg-emerald-50 border-emerald-100",
-  "Biomarkers (FDA BEST Framework)": "text-violet-600 bg-violet-50 border-violet-100",
   "Treatment & Medication History":  "text-amber-600 bg-amber-50 border-amber-100",
-  "Functional & Cognitive Status":   "text-cyan-600 bg-cyan-50 border-cyan-100",
   "Ethical & Regulatory":            "text-pink-600 bg-pink-50 border-pink-100",
 };
 
@@ -122,6 +122,14 @@ export default function TrialQualificationPanel({
                       Pembrolizumab · Keytruda®
                     </span>
                     <span className="text-xs text-gray-500">PD-1 Checkpoint Inhibitor · FDA Approved</span>
+                    <a
+                      href="https://clinicaltrials.gov/study/NCT01295827#participation-criteria"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-mono underline underline-offset-2"
+                    >
+                      NCT01295827
+                    </a>
                   </div>
                   <h2 className="text-xl font-semibold text-gray-900">Clinical Trial Qualification Report</h2>
                   <p className="text-sm text-gray-500 mt-0.5">
@@ -321,7 +329,7 @@ export default function TrialQualificationPanel({
               {/* Criteria by category */}
               {Object.entries(grouped).map(([category, results]) => {
                 const catStyle = categoryColors[category] ?? 'text-gray-600 bg-gray-50 border-gray-100';
-                const icon = categoryIcons[category] ?? <Stethoscope className="w-4 h-4" />;
+                const icon = categoryIcons[category] ?? <ShieldCheck className="w-4 h-4" />;
                 const hasIssue = results.some((r) => r.status === 'not_met');
                 const hasUnknown = results.some((r) => r.status === 'unknown');
 
