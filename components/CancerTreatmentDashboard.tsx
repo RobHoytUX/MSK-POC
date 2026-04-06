@@ -475,7 +475,6 @@ export default function CancerTreatmentDashboard({
   const [lastUpdated, setLastUpdated] = useState("30 minutes ago");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>("dashboard");
-  const [chartBackView, setChartBackView] = useState<ActiveView>("dashboard");
   const [clinicalTrialsNav, setClinicalTrialsNav] = useState<{
     listTab: "all" | "qualified";
     focusTrialId: string | null;
@@ -982,11 +981,6 @@ export default function CancerTreatmentDashboard({
             selectedPatient={selectedPatient}
             cohortPatients={cohortPatientsList}
             onChangePatient={onChangePatient}
-            onOpenPatientChart={() => {
-              setChartBackView(activeView);
-              setActiveView("patientChart");
-              setShowKeywordsTree(false);
-            }}
             headerActions={renderHeaderActions()}
             onAskAI={() => {
               setIsAIPanelOpen(true);
@@ -1005,7 +999,7 @@ export default function CancerTreatmentDashboard({
             selectedPatient={selectedPatient}
             onChangePatient={onChangePatient}
             onBack={() => {
-              setActiveView(chartBackView);
+              setActiveView("dashboard");
               setShowKeywordsTree(false);
             }}
           />

@@ -1,9 +1,8 @@
 import { ReactNode, useMemo, useState } from "react";
 import myChartLogo from "../src/assets/mychart-logo.png";
 import { Patient } from "../lib/patients";
-import { CalendarCheck2, FlaskConical, Pill, AlertTriangle, Clock, Search, X, FileText, Sparkles, UserRound, Newspaper, Network, UsersRound, ChevronRight } from "lucide-react";
+import { CalendarCheck2, FlaskConical, Pill, AlertTriangle, Clock, Search, X, Sparkles, UserRound, Newspaper, Network, UsersRound, ChevronRight } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
-import PatientChartPage from "./PatientChartPage";
 import MyPatientsDialog from "./MyPatientsDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
@@ -12,7 +11,6 @@ interface DashboardPageProps {
   /** Full cohort from onboarding (order preserved; first is primary chart). */
   cohortPatients?: Patient[];
   onChangePatient?: () => void;
-  onOpenPatientChart?: () => void;
   headerActions?: ReactNode;
   onAskAI?: () => void;
   onOpenNewsFeed?: () => void;
@@ -66,21 +64,10 @@ export default function DashboardPage({
 }: DashboardPageProps) {
   const { profile, user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
-  const [isChartOpen, setIsChartOpen] = useState(false);
-  const [isChartVisible, setIsChartVisible] = useState(false);
   const [myPatientsOpen, setMyPatientsOpen] = useState(false);
 
   const patientsForDialog = cohortPatients.length > 0 ? cohortPatients : selectedPatient ? [selectedPatient] : [];
 
-  const openChart = () => {
-    setIsChartOpen(true);
-    setTimeout(() => setIsChartVisible(true), 10);
-  };
-
-  const closeChart = () => {
-    setIsChartVisible(false);
-    setTimeout(() => setIsChartOpen(false), 300);
-  };
   const welcomeName = useMemo(() => {
     const fromProfile = profile?.full_name?.trim();
     if (fromProfile) return fromProfile;
@@ -181,13 +168,6 @@ export default function DashboardPage({
                 ))}
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={openChart}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
-              >
-                <FileText className="w-4 h-4" />
-                Open Chart
-              </button>
               {onOpenNewsFeed && (
                 <button
                   onClick={onOpenNewsFeed}
@@ -394,26 +374,6 @@ export default function DashboardPage({
         </div> {/* end max-w-5xl wrapper */}
       </div>
       </div> {/* end scrollable content */}
-
-      {/* Patient Chart Side Panel */}
-      {isChartOpen && (
-        <>
-          {/* Overlay */}
-          <div
-            className={`fixed inset-0 bg-black/30 z-40 transition-opacity duration-300 ${isChartVisible ? "opacity-100" : "opacity-0"}`}
-            onClick={closeChart}
-          />
-          {/* Panel — 50% width, full height */}
-          <div
-            className={`fixed top-0 right-0 h-full w-1/2 bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out ${isChartVisible ? "translate-x-0" : "translate-x-full"}`}
-          >
-            <PatientChartPage
-              selectedPatient={selectedPatient}
-              onBack={closeChart}
-            />
-          </div>
-        </>
-      )}
 
       <MyPatientsDialog
         open={myPatientsOpen}
