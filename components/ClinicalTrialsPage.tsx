@@ -528,9 +528,6 @@ export default function ClinicalTrialsPage({
                         Change Patient
                       </button>
                     )}
-                    <span className="text-gray-900 font-medium">{selectedPatient.name}</span>
-                    <span className="text-gray-300" aria-hidden>·</span>
-                    <span>{selectedPatient.age}yo {selectedPatient.gender} · {selectedPatient.diagnoses[0]} · {selectedPatient.mrn}</span>
                   </div>
                 ) : (
                   <p className="text-gray-500">Explore relevant breast cancer clinical trials and research studies</p>

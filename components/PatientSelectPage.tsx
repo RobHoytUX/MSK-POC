@@ -1,18 +1,23 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { Search, X, Calendar, Clock, Pill, Stethoscope, Phone, Mail, MapPin, ChevronRight, Users, LogOut } from 'lucide-react';
-import { patients, Patient } from '../lib/patients';
+import { Search, X, Calendar, Clock, Pill, Stethoscope, Phone, Mail, MapPin, ChevronRight, Users, LogOut, CheckSquare, Square } from 'lucide-react';
+import { patients } from '../lib/patients';
 import { useAuth } from '../lib/AuthContext';
 import mapsLogo from '../src/assets/maps-logo.png';
 
 interface PatientSelectPageProps {
-  onSelectPatient: (patient: Patient) => void;
+  onContinue: (selectedPatientIds: string[]) => void;
+  /** Pre-select patients (e.g. when returning from dashboard to edit cohort). */
+  initialSelectedPatientIds?: string[];
 }
 
-export default function PatientSelectPage({ onSelectPatient }: PatientSelectPageProps) {
+export default function PatientSelectPage({ onContinue, initialSelectedPatientIds = [] }: PatientSelectPageProps) {
   const { profile, signOut } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedPatient, setExpandedPatient] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    () => new Set(initialSelectedPatientIds)
+  );
 
   const filtered = patients.filter(p => {
     const q = searchQuery.toLowerCase();
@@ -28,10 +33,33 @@ export default function PatientSelectPage({ onSelectPatient }: PatientSelectPage
     setExpandedPatient(expandedPatient === id ? null : id);
   };
 
+  const togglePatientSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((p) => selectedIds.has(p.id));
+
+  const toggleSelectAllFiltered = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        filtered.forEach((p) => next.delete(p.id));
+      } else {
+        filtered.forEach((p) => next.add(p.id));
+      }
+      return next;
+    });
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50/30">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
+    <div className="h-[100dvh] flex flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-indigo-50/30">
+      {/* Header — fixed height; list scrolls between header and footer */}
+      <div className="bg-white border-b border-gray-200 shadow-sm shrink-0 z-10">
         <div className="max-w-6xl mx-auto px-6 py-5">
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-4">
@@ -41,14 +69,14 @@ export default function PatientSelectPage({ onSelectPatient }: PatientSelectPage
                 className="h-[30px] w-[30px] object-contain shrink-0"
               />
               <div>
-                <h1 className="text-xl font-semibold text-gray-900">Select Patient</h1>
-                <p className="text-sm text-gray-500">Choose a patient to view their chart</p>
+                <h1 className="text-xl font-semibold text-gray-900">Select patients</h1>
+                <p className="text-sm text-gray-500">Choose one or more patients, then continue to trial matching</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full">
                 <Users className="w-4 h-4 text-gray-500" />
-                <span className="text-sm text-gray-600">{filtered.length} patients</span>
+                <span className="text-sm text-gray-600">{filtered.length} shown</span>
               </div>
               <div className="flex items-center gap-3">
                 <div className="text-right">
@@ -88,12 +116,27 @@ export default function PatientSelectPage({ onSelectPatient }: PatientSelectPage
               </button>
             )}
           </div>
+
+          <div className="flex items-center justify-between gap-3 mt-4 flex-wrap">
+            <button
+              type="button"
+              onClick={toggleSelectAllFiltered}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              {allFilteredSelected ? <CheckSquare className="w-4 h-4 text-indigo-600" /> : <Square className="w-4 h-4 text-gray-400" />}
+              {allFilteredSelected ? 'Deselect all in view' : 'Select all in view'}
+            </button>
+            <p className="text-sm text-gray-600">
+              <span className="font-semibold text-gray-900">{selectedIds.size}</span> patient{selectedIds.size !== 1 ? 's' : ''} selected
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Patient List */}
-      <div className="max-w-6xl mx-auto px-6 py-6">
-        <div className="grid gap-3">
+      {/* Patient list — scrolls between header and footer */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="max-w-6xl mx-auto px-6 py-6 pb-4">
+          <div className="grid gap-3">
           {filtered.map((patient, idx) => (
             <motion.div
               key={patient.id}
@@ -107,6 +150,23 @@ export default function PatientSelectPage({ onSelectPatient }: PatientSelectPage
                 className="flex items-center gap-4 px-5 py-4 cursor-pointer group"
                 onClick={() => toggleExpand(patient.id)}
               >
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={selectedIds.has(patient.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    togglePatientSelected(patient.id);
+                  }}
+                  className="shrink-0 p-1 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-indigo-600"
+                  title={selectedIds.has(patient.id) ? 'Deselect' : 'Select'}
+                >
+                  {selectedIds.has(patient.id) ? (
+                    <CheckSquare className="w-5 h-5 text-indigo-600" />
+                  ) : (
+                    <Square className="w-5 h-5" />
+                  )}
+                </button>
                 {/* Avatar */}
                 <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-indigo-700 text-sm font-bold flex-shrink-0 border border-indigo-200/50">
                   {patient.name.split(' ').map(n => n[0]).join('')}
@@ -230,18 +290,6 @@ export default function PatientSelectPage({ onSelectPatient }: PatientSelectPage
                         <div className="mt-3 text-xs text-gray-500">
                           <span className="font-medium">Insurance:</span> {patient.insuranceProvider}
                         </div>
-
-                        {/* Select Button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectPatient(patient);
-                          }}
-                          className="w-full mt-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 group"
-                        >
-                          Open Chart
-                          <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                        </button>
                       </div>
                     </div>
                   </div>
@@ -256,6 +304,30 @@ export default function PatientSelectPage({ onSelectPatient }: PatientSelectPage
               <p className="text-gray-500">No patients match your search</p>
             </div>
           )}
+          </div>
+        </div>
+      </div>
+
+      <div className="shrink-0 border-t border-gray-200 bg-white/95 backdrop-blur-md shadow-[0_-4px_24px_rgba(0,0,0,0.06)] z-20">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
+          <p className="text-sm text-gray-600">
+            {selectedIds.size === 0 ? (
+              'Select at least one patient to continue.'
+            ) : (
+              <>
+                <span className="font-semibold text-gray-900">{selectedIds.size}</span> patient{selectedIds.size !== 1 ? 's' : ''} will be included in trial matching.
+              </>
+            )}
+          </p>
+          <button
+            type="button"
+            disabled={selectedIds.size === 0}
+            onClick={() => onContinue(Array.from(selectedIds))}
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:pointer-events-none text-white text-sm font-semibold transition-colors"
+          >
+            Continue to trial matching
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </div>

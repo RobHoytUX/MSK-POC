@@ -1,13 +1,32 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AuthProvider, useAuth } from "./lib/AuthContext";
 import CancerTreatmentDashboard from "./components/CancerTreatmentDashboard";
 import AuthPage from "./components/AuthPage";
 import PatientSelectPage from "./components/PatientSelectPage";
-import { Patient } from "./lib/patients";
+import TrialPatientMatchingPage from "./components/TrialPatientMatchingPage";
+import { Patient, patients } from "./lib/patients";
+
+type OnboardingPhase = "patients" | "matching" | null;
 
 function AppContent() {
   const { user, loading } = useAuth();
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [onboardingPhase, setOnboardingPhase] = useState<OnboardingPhase>("patients");
+  const [cohortPatientIds, setCohortPatientIds] = useState<string[]>([]);
+  const [trialQualifiedPatientIds, setTrialQualifiedPatientIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!user) {
+      setOnboardingPhase("patients");
+      setCohortPatientIds([]);
+      setTrialQualifiedPatientIds([]);
+    }
+  }, [user]);
+
+  const selectedPatient = useMemo<Patient | null>(() => {
+    const firstId = cohortPatientIds[0];
+    if (!firstId) return null;
+    return patients.find((p) => p.id === firstId) ?? null;
+  }, [cohortPatientIds]);
 
   if (loading) {
     return (
@@ -24,10 +43,31 @@ function AppContent() {
     return <AuthPage />;
   }
 
-  if (!selectedPatient) {
+  if (onboardingPhase === "patients") {
     return (
       <div className="app-light min-h-screen">
-        <PatientSelectPage onSelectPatient={setSelectedPatient} />
+        <PatientSelectPage
+          initialSelectedPatientIds={cohortPatientIds}
+          onContinue={(ids) => {
+            setCohortPatientIds(ids);
+            setOnboardingPhase("matching");
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (onboardingPhase === "matching") {
+    return (
+      <div className="app-light min-h-screen">
+        <TrialPatientMatchingPage
+          selectedPatientIds={cohortPatientIds}
+          onBack={() => setOnboardingPhase("patients")}
+          onComplete={(qualifiedIds) => {
+            setTrialQualifiedPatientIds(qualifiedIds);
+            setOnboardingPhase(null);
+          }}
+        />
       </div>
     );
   }
@@ -35,8 +75,12 @@ function AppContent() {
   return (
     <div className="app-light size-full">
       <CancerTreatmentDashboard
-        selectedPatient={selectedPatient}
-        onChangePatient={() => setSelectedPatient(null)}
+        selectedPatient={selectedPatient ?? undefined}
+        cohortPatientIds={cohortPatientIds}
+        trialQualifiedPatientIds={trialQualifiedPatientIds}
+        onChangePatient={() => {
+          setOnboardingPhase("patients");
+        }}
       />
     </div>
   );

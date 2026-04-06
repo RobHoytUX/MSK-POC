@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays, Bell, SlidersHorizontal, Layers3, Stethoscope, Microscope, UserRound, UsersRound, Users, PanelRightOpen, ListFilter } from "lucide-react";
+import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays, Bell, SlidersHorizontal, Layers3, Stethoscope, Microscope, UserRound, UsersRound, PanelRightOpen, ListFilter } from "lucide-react";
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -23,6 +23,10 @@ import ComparePatientPanel from './ComparePatientPanel';
 import PatientComparisonView from './PatientComparisonView';
 import TrialQualificationPanel from './TrialQualificationPanel';
 import CriteriaMatchingPanel from './CriteriaMatchingPanel';
+import QualifiedTrialPatientsSidebar from './QualifiedTrialPatientsSidebar';
+import TrialKeywordCanvas from "./TrialKeywordCanvas";
+import KeywordAnalysisPanel from "./KeywordAnalysisPanel";
+import type { FdaKeyword } from "../lib/keytrudaFdaKeywords";
 import { useAuth } from '../lib/AuthContext';
 import ProfilePanel from './ProfilePanel';
 import NotificationsPanel from './NotificationsPanel';
@@ -398,6 +402,10 @@ const filterEventsByRange = (events: TimelineEvent[], startMonth: number, endMon
 interface DashboardProps {
   selectedPatient?: Patient;
   onChangePatient?: () => void;
+  /** Patients chosen during onboarding (multi-select). */
+  cohortPatientIds?: string[];
+  /** Patients who met trial matching criteria (≥70%, no exclusions) after onboarding. */
+  trialQualifiedPatientIds?: string[];
 }
 
 type ActiveView = "dashboard" | "patientChart" | "timeline" | "trials" | "research" | "ai";
@@ -406,7 +414,12 @@ type FeatureScope = "all" | "clinical" | "research";
 const getDefaultViewForScope = (scope: FeatureScope): ActiveView =>
   scope === "research" ? "trials" : "timeline";
 
-export default function CancerTreatmentDashboard({ selectedPatient, onChangePatient }: DashboardProps) {
+export default function CancerTreatmentDashboard({
+  selectedPatient,
+  onChangePatient,
+  cohortPatientIds = [],
+  trialQualifiedPatientIds = [],
+}: DashboardProps) {
   const { profile, user } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -475,7 +488,54 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
   const [isScopePickerOpen, setIsScopePickerOpen] = useState(false);
   const [showKeywordsTree, setShowKeywordsTree] = useState(false);
   const [discoveryTab, setDiscoveryTab] = useState<"timeline" | "keywords">("timeline");
-  const [keywordsNodeFocused, setKeywordsNodeFocused] = useState(false);
+  const [, setKeywordsNodeFocused] = useState(false);
+  const [trialDiscoverySidebarOpen, setTrialDiscoverySidebarOpen] = useState(false);
+  const [trialKeywordCanvasPatientId, setTrialKeywordCanvasPatientId] = useState<string | null>(null);
+  const [trialKeywordAnalysis, setTrialKeywordAnalysis] = useState<FdaKeyword | null>(null);
+
+  const trialKeywordCanvasPatient = useMemo(
+    () =>
+      trialKeywordCanvasPatientId ? patients.find((p) => p.id === trialKeywordCanvasPatientId) ?? null : null,
+    [trialKeywordCanvasPatientId]
+  );
+
+  /** Trial keyword view + cohort sidebar: Open Chart shows the patient selected in the cohort list. */
+  const patientForGlobalChartPanel = useMemo(() => {
+    if (
+      activeView === "timeline" &&
+      discoveryTab === "keywords" &&
+      trialDiscoverySidebarOpen &&
+      trialKeywordCanvasPatient
+    ) {
+      return trialKeywordCanvasPatient;
+    }
+    return selectedPatient;
+  }, [
+    activeView,
+    discoveryTab,
+    trialDiscoverySidebarOpen,
+    trialKeywordCanvasPatient,
+    selectedPatient,
+  ]);
+
+  /** Trial keyword canvas + cohort sidebar (same as dashboard “trial discovery”). */
+  const openTrialDiscoveryKeywordsView = useCallback(() => {
+    setDiscoveryTab("keywords");
+    setTrialKeywordCanvasPatientId(selectedPatient?.id ?? null);
+    setTrialKeywordAnalysis(null);
+    setTrialDiscoverySidebarOpen(true);
+  }, [selectedPatient]);
+
+  const trialQualifiedPatientsList = useMemo(
+    () => patients.filter((p) => trialQualifiedPatientIds.includes(p.id)),
+    [trialQualifiedPatientIds]
+  );
+
+  const cohortPatientsList = useMemo(
+    () => cohortPatientIds.map((id) => patients.find((p) => p.id === id)).filter((p): p is Patient => !!p),
+    [cohortPatientIds]
+  );
+
   const scopePickerRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState([
     {
@@ -511,6 +571,17 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
       setShowKeywordsTree(false);
     }
   }, [activeView, featureScope, isViewAllowed]);
+
+  useEffect(() => {
+    if (discoveryTab !== "keywords") setTrialDiscoverySidebarOpen(false);
+  }, [discoveryTab]);
+
+  useEffect(() => {
+    if (discoveryTab !== "keywords" || !trialDiscoverySidebarOpen) {
+      setTrialKeywordAnalysis(null);
+      setTrialKeywordCanvasPatientId(null);
+    }
+  }, [discoveryTab, trialDiscoverySidebarOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -909,6 +980,7 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
         ) : activeView === "dashboard" ? (
           <DashboardPage
             selectedPatient={selectedPatient}
+            cohortPatients={cohortPatientsList}
             onChangePatient={onChangePatient}
             onOpenPatientChart={() => {
               setChartBackView(activeView);
@@ -921,16 +993,11 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
               setTimeout(() => setIsAIPanelVisible(true), 10);
             }}
             onOpenNewsFeed={() => setIsNewsFeedOpen(true)}
-            onOpenClinicalTrials={(opts) => {
-              setClinicalTrialsNav({
-                listTab: opts?.listTab ?? "qualified",
-                focusTrialId: opts?.trialId ?? null,
-              });
-              setActiveView("trials");
-            }}
-            onViewQualificationReport={() => {
-              setQualificationPanelPatient(selectedPatient);
-              setIsQualificationPanelOpen(true);
+            trialQualifiedPatientIds={trialQualifiedPatientIds}
+            cohortPatientCount={cohortPatientIds.length}
+            onOpenTrialDiscovery={() => {
+              setActiveView("timeline");
+              openTrialDiscoveryKeywordsView();
             }}
           />
         ) : activeView === "patientChart" ? (
@@ -944,8 +1011,8 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
           />
         ) : activeView === "timeline" ? (
           <>
-            {/* Header — avoid z-stacking above fixed overlays (e.g. Doctor Network in Keywords) */}
-            <div className="bg-white relative shrink-0 shadow-sm">
+            {/* Header — sits above Keywords canvas; keep z-index so content never overlaps */}
+            <div className="bg-white relative z-10 shrink-0 shadow-sm">
               <div className="px-8 py-6">
                 <div className="flex items-center justify-between mb-6">
                   <div>
@@ -962,28 +1029,12 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
                             Change Patient
                           </button>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => setIsComparePatientOpen(true)}
-                          className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-violet-50 hover:bg-violet-100 text-violet-700 text-sm font-medium border border-violet-200 transition-colors mr-1"
-                        >
-                          <Users className="w-3.5 h-3.5" />
-                          Compare Patients
-                          {compareSelectedIds.size > 0 && (
-                            <span className="ml-0.5 w-4 h-4 flex items-center justify-center rounded-full bg-violet-600 text-white text-[10px] font-bold leading-none">
-                              {compareSelectedIds.size}
-                            </span>
-                          )}
-                        </button>
-                        <span className="text-gray-900 font-medium">{selectedPatient.name}</span>
-                        <span className="text-gray-300" aria-hidden>·</span>
-                        <span>{selectedPatient.age}yo {selectedPatient.gender} · {selectedPatient.diagnoses[0]} · {selectedPatient.mrn}</span>
                       </div>
                     ) : (
                       <p className="text-gray-500">Track treatment progress and key milestones</p>
                     )}
                   </div>
-                  <div className={`flex items-center gap-4 transition-all duration-300 ease-in-out ${keywordsNodeFocused && discoveryTab === "keywords" ? "pr-[440px]" : ""}`}>
+                  <div className="flex items-center gap-4">
                     <div className="relative w-96">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                       <input
@@ -1007,12 +1058,14 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
                 </div>
                 
                 {/* Discovery Tabs + Keywords actions */}
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between pb-1">
                   <div className="flex items-center gap-1">
                     {(["timeline", "keywords"] as const).map((tab) => (
                       <button
                         key={tab}
-                        onClick={() => setDiscoveryTab(tab)}
+                        onClick={() =>
+                          tab === "keywords" ? openTrialDiscoveryKeywordsView() : setDiscoveryTab("timeline")
+                        }
                         className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all capitalize ${
                           discoveryTab === tab
                             ? "bg-indigo-600 text-white shadow-sm"
@@ -1031,6 +1084,22 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
                       >
                         <PanelRightOpen className="w-4 h-4" />
                         Side by Side
+                      </button>
+                    )}
+                    {discoveryTab === "keywords" && trialDiscoverySidebarOpen && (
+                      <button
+                        type="button"
+                        disabled={!trialKeywordCanvasPatient}
+                        onClick={() => {
+                          if (trialKeywordCanvasPatient) {
+                            setQualificationPanelPatient(trialKeywordCanvasPatient);
+                            setIsQualificationPanelOpen(true);
+                          }
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                      >
+                        <FileText className="w-4 h-4" />
+                        View Qualification Report
                       </button>
                     )}
                     <button
@@ -1210,22 +1279,58 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
               </div>
             </div>
 
-            {/* Keywords tab — inline WaveVisualization */}
+            {/* Keywords tab — full medical graph, or trial keyword canvas + cohort sidebar */}
             {discoveryTab === "keywords" && (
-              <div className="flex-1 overflow-hidden">
-                <WaveVisualization
-                  doctorFeedBridgeRef={doctorFeedBridgeRef}
-                  onDoctorFeedClose={closeDoctorFeed}
-                  onDoctorFeedOpenFromCanvas={openDoctorFeedFromCanvas}
-                  onDoctorFeedPostsChanged={bumpDoctorFeedRefresh}
-                  onFocusedNodeChange={setKeywordsNodeFocused}
-                  pendingDoctorFeedConnection={pendingDoctorFeedConnection}
-                  onConsumePendingDoctorFeedConnection={clearPendingDoctorFeedConnection}
-                  comparePatients={compareSelectedPatients}
-                  activeComparePatientId={activeComparePatientId}
-                  onSetActiveComparePatient={setActiveComparePatientId}
-                  clinicalTrialMode={compareIsClinicalTrialMode}
-                />
+              <div
+                className={`flex-1 overflow-hidden flex min-h-0 ${
+                  trialDiscoverySidebarOpen
+                    ? "flex-col lg:flex-row bg-gradient-to-br from-slate-50 to-violet-50/40"
+                    : "flex-col"
+                }`}
+              >
+                <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden relative">
+                  {trialDiscoverySidebarOpen ? (
+                    <>
+                      <TrialKeywordCanvas
+                        selectedPatient={trialKeywordCanvasPatient}
+                        onKeywordClick={(kw) => setTrialKeywordAnalysis(kw)}
+                      />
+                      <KeywordAnalysisPanel
+                        keyword={trialKeywordAnalysis}
+                        patientName={trialKeywordCanvasPatient?.name ?? null}
+                        onClose={() => setTrialKeywordAnalysis(null)}
+                      />
+                    </>
+                  ) : (
+                    <WaveVisualization
+                      doctorFeedBridgeRef={doctorFeedBridgeRef}
+                      onDoctorFeedClose={closeDoctorFeed}
+                      onDoctorFeedOpenFromCanvas={openDoctorFeedFromCanvas}
+                      onDoctorFeedPostsChanged={bumpDoctorFeedRefresh}
+                      onFocusedNodeChange={setKeywordsNodeFocused}
+                      pendingDoctorFeedConnection={pendingDoctorFeedConnection}
+                      onConsumePendingDoctorFeedConnection={clearPendingDoctorFeedConnection}
+                      comparePatients={compareSelectedPatients}
+                      activeComparePatientId={activeComparePatientId}
+                      onSetActiveComparePatient={setActiveComparePatientId}
+                      clinicalTrialMode={compareIsClinicalTrialMode}
+                    />
+                  )}
+                </div>
+                {trialDiscoverySidebarOpen && (
+                  <div className="w-full lg:w-[min(420px,40vw)] shrink-0 flex flex-col min-h-0 max-h-[45vh] lg:max-h-none">
+                    <QualifiedTrialPatientsSidebar
+                      patients={
+                        cohortPatientsList.length > 0 ? cohortPatientsList : trialQualifiedPatientsList
+                      }
+                      selectedPatientId={trialKeywordCanvasPatientId}
+                      onSelectPatient={(id) => {
+                        setTrialKeywordCanvasPatientId(id);
+                        setTrialKeywordAnalysis(null);
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -1879,7 +1984,7 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
             className={`fixed top-0 right-0 h-full w-1/2 bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out ${isGlobalChartVisible ? "translate-x-0" : "translate-x-full"}`}
           >
             <PatientChartPage
-              selectedPatient={selectedPatient}
+              selectedPatient={patientForGlobalChartPanel}
               onBack={closeGlobalChart}
             />
           </div>
@@ -1904,7 +2009,7 @@ export default function CancerTreatmentDashboard({ selectedPatient, onChangePati
           if (isClinicalEnabled) {
             setShowKeywordsTree(false);
             setActiveView("timeline");
-            setDiscoveryTab("keywords");
+            openTrialDiscoveryKeywordsView();
           } else {
             setShowKeywordsTree(true);
           }

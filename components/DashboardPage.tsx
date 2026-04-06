@@ -1,22 +1,26 @@
 import { ReactNode, useMemo, useState } from "react";
 import myChartLogo from "../src/assets/mychart-logo.png";
 import { Patient } from "../lib/patients";
-import { getQualifiedTrialIds } from "../lib/trialQualification";
-import { clinicalTrialsData } from "./ClinicalTrialsPage";
-import { CalendarCheck2, FlaskConical, Pill, AlertTriangle, Clock, Search, X, FileText, Sparkles, UserRound, Newspaper } from "lucide-react";
+import { CalendarCheck2, FlaskConical, Pill, AlertTriangle, Clock, Search, X, FileText, Sparkles, UserRound, Newspaper, Network, UsersRound, ChevronRight } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import PatientChartPage from "./PatientChartPage";
+import MyPatientsDialog from "./MyPatientsDialog";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
 interface DashboardPageProps {
   selectedPatient?: Patient;
+  /** Full cohort from onboarding (order preserved; first is primary chart). */
+  cohortPatients?: Patient[];
   onChangePatient?: () => void;
   onOpenPatientChart?: () => void;
   headerActions?: ReactNode;
   onAskAI?: () => void;
-  /** Opens Clinical Trials; defaults to the Qualified tab unless `listTab` is `"all"`. */
-  onOpenClinicalTrials?: (opts?: { trialId?: string; listTab?: "all" | "qualified" }) => void;
   onOpenNewsFeed?: () => void;
-  onViewQualificationReport?: () => void;
+  /** IDs of patients who matched trial criteria during onboarding. */
+  trialQualifiedPatientIds?: string[];
+  cohortPatientCount?: number;
+  /** Opens Discovery on Keywords with trial keyword strip + qualified cohort sidebar. */
+  onOpenTrialDiscovery?: () => void;
 }
 
 const cards = [
@@ -51,17 +55,22 @@ const cards = [
 
 export default function DashboardPage({
   selectedPatient,
+  cohortPatients = [],
   onChangePatient,
   headerActions,
   onAskAI,
-  onOpenClinicalTrials,
   onOpenNewsFeed,
-  onViewQualificationReport,
+  trialQualifiedPatientIds = [],
+  cohortPatientCount = 0,
+  onOpenTrialDiscovery,
 }: DashboardPageProps) {
   const { profile, user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [isChartOpen, setIsChartOpen] = useState(false);
   const [isChartVisible, setIsChartVisible] = useState(false);
+  const [myPatientsOpen, setMyPatientsOpen] = useState(false);
+
+  const patientsForDialog = cohortPatients.length > 0 ? cohortPatients : selectedPatient ? [selectedPatient] : [];
 
   const openChart = () => {
     setIsChartOpen(true);
@@ -89,42 +98,37 @@ export default function DashboardPage({
       ]
     : [];
 
-  const qualifiedTrialIds = useMemo(
-    () => (selectedPatient ? getQualifiedTrialIds(selectedPatient) : []),
-    [selectedPatient]
-  );
-  const qualifiedTrialsForUi = useMemo(
-    () =>
-      qualifiedTrialIds
-        .map((id) => clinicalTrialsData.find((t) => t.id === id))
-        .filter((t): t is NonNullable<typeof t> => Boolean(t)),
-    [qualifiedTrialIds]
-  );
-
   return (
     <div className="h-full flex flex-col bg-white">
       {/* Fixed header */}
       <div className="bg-white shadow-sm shrink-0">
-        <div className="px-8 py-6">
+        <div className="px-8 pt-6 pb-4">
           {/* Row 1: title + search + header icons — mirrors Timeline row 1 */}
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-[27px] font-medium text-gray-900 mb-1">Welcome, {welcomeName}!</h1>
               {selectedPatient ? (
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-gray-500 text-base mt-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-2 text-gray-500 text-base mt-1">
+                  {patientsForDialog.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setMyPatientsOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-medium border border-indigo-200 transition-colors"
+                    >
+                      <UsersRound className="w-3.5 h-3.5" />
+                      My Patients
+                    </button>
+                  )}
                   {onChangePatient && (
                     <button
                       type="button"
                       onClick={onChangePatient}
-                      className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-medium border border-indigo-200 transition-colors mr-1"
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-medium border border-indigo-200 transition-colors"
                     >
                       <UserRound className="w-3.5 h-3.5" />
                       Change Patient
                     </button>
                   )}
-                  <span className="text-gray-900 font-medium">{selectedPatient.name}</span>
-                  <span className="text-gray-300" aria-hidden>·</span>
-                  <span>{selectedPatient.age}yo {selectedPatient.gender} · {selectedPatient.diagnoses[0]} · {selectedPatient.mrn}</span>
                 </div>
               ) : (
                 <p className="text-gray-500 mt-1">Action Board</p>
@@ -153,10 +157,30 @@ export default function DashboardPage({
             </div>
           </div>
 
-          {/* Row 2: action buttons right — same structure as Discovery tabs row */}
-          <div className="flex items-center justify-between mb-4">
-            <div />
-            <div className="flex items-center gap-2">
+          {/* Row 2: alert badges (left) + primary actions (right) */}
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1 justify-start">
+              {selectedPatient &&
+                activeAlerts.map((alert, idx) => (
+                  <Popover key={idx}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label={`View alert ${idx + 1} details`}
+                        className="inline-flex items-center gap-1.5 max-w-[min(100%,16rem)] pl-2.5 pr-3 py-1.5 rounded-full border border-amber-200 bg-amber-50 text-amber-950 text-xs font-medium shadow-sm hover:bg-amber-100 transition-colors text-left"
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-700 shrink-0" aria-hidden />
+                        <span className="truncate">{alert}</span>
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-96 max-w-[calc(100vw-2rem)]" align="start" sideOffset={8}>
+                      <p className="text-xs font-semibold text-amber-900 mb-2">Alert {idx + 1}</p>
+                      <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{alert}</p>
+                    </PopoverContent>
+                  </Popover>
+                ))}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={openChart}
                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
@@ -190,48 +214,6 @@ export default function DashboardPage({
       <div className="px-8 pt-10 pb-4 flex flex-col items-center">
         <div className="w-full max-w-5xl -mt-4">
 
-        {/* Up Next — patient summary card only */}
-        {selectedPatient && (
-          <div className="mb-8">
-            <div className="flex items-center gap-2 mb-3">
-              <Clock className="w-4 h-4 text-indigo-600" />
-              <p className="text-sm font-semibold text-gray-900">My Patient</p>
-            </div>
-            <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-indigo-50 to-white shadow-sm p-6">
-              <div className="flex items-start justify-between gap-6">
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-full bg-indigo-100 border border-indigo-200 text-indigo-700 flex items-center justify-center font-semibold">
-                    {selectedPatient.name
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")}
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-900">{selectedPatient.name}</h2>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {selectedPatient.age}yo {selectedPatient.gender} · MRN {selectedPatient.mrn}
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <span className="text-xs px-2 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
-                        {selectedPatient.diagnoses[0]}
-                      </span>
-                      <span className="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                        {selectedPatient.medications[0]}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="min-w-[200px] text-right">
-                  <p className="text-xs text-gray-500">Next appointment</p>
-                  <p className="text-sm font-medium text-gray-900 mt-1">
-                    {selectedPatient.upcomingAppointments[0]?.date || "Not scheduled"}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         <div className="w-full flex flex-row gap-4 mb-8">
           {cards.map((card) => (
             <div
@@ -262,73 +244,122 @@ export default function DashboardPage({
           ))}
         </div>
 
-        {selectedPatient && activeAlerts.length > 0 && (
-          <div className="mb-8 rounded-2xl border border-amber-100 bg-amber-50/50 p-5">
+        {/* Up Next — cohort summary (click to open full list) */}
+        {selectedPatient && patientsForDialog.length > 0 && (
+          <div className="mb-8">
             <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="w-4 h-4 text-amber-700" />
-              <h3 className="text-sm font-semibold text-amber-900">Active Alerts</h3>
+              <Clock className="w-4 h-4 text-indigo-600" />
+              <p className="text-sm font-semibold text-gray-900">My Patients</p>
             </div>
-            <div className="flex flex-col gap-2">
-              {activeAlerts.map((alert, idx) => (
-                <div
-                  key={idx}
-                  className="rounded-lg border border-amber-200 bg-white px-4 py-3 text-sm text-gray-800 shadow-sm"
-                >
-                  {alert}
+            <button
+              type="button"
+              onClick={() => setMyPatientsOpen(true)}
+              className="w-full text-left rounded-2xl border border-gray-200 bg-gradient-to-br from-indigo-50 to-white shadow-sm p-6 hover:border-indigo-300 hover:shadow-md transition-all group focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            >
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div className="flex items-start gap-4 min-w-0">
+                  <div className="flex -space-x-2 shrink-0">
+                    {patientsForDialog.slice(0, 6).map((p) => (
+                      <div
+                        key={p.id}
+                        className="w-11 h-11 rounded-full bg-indigo-100 border-2 border-white text-indigo-700 flex items-center justify-center text-xs font-bold shadow-sm"
+                        title={p.name}
+                      >
+                        {p.name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      {patientsForDialog.length} patient{patientsForDialog.length !== 1 ? "s" : ""} in cohort
+                    </h2>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Primary chart: {selectedPatient.name} · {selectedPatient.diagnoses[0]}
+                    </p>
+                    {patientsForDialog.length > 1 && (
+                      <p className="text-xs text-gray-500 mt-2 line-clamp-2">
+                        {patientsForDialog.map((p) => p.name).join(" · ")}
+                      </p>
+                    )}
+                    {patientsForDialog.length === 1 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span className="text-xs px-2 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
+                          {selectedPatient.diagnoses[0]}
+                        </span>
+                        <span className="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                          {selectedPatient.medications[0]}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              ))}
-            </div>
+                <div className="flex flex-col items-end gap-2 shrink-0">
+                  <span className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 group-hover:text-indigo-700">
+                    View all
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                  </span>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500">Next appointment (primary)</p>
+                    <p className="text-sm font-medium text-gray-900 mt-0.5">
+                      {selectedPatient.upcomingAppointments[0]?.date || "Not scheduled"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </button>
           </div>
         )}
 
-        {selectedPatient && (onOpenClinicalTrials || onViewQualificationReport) && (
-          <div className="mb-8 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <FlaskConical className="w-4 h-4 text-emerald-700" />
-                <h3 className="text-sm font-semibold text-emerald-900">Pembrolizumab (Keytruda®) Qualification</h3>
+        {/* Clinical trial keyword discovery — opens Discovery → Keywords (trial canvas + qualified sidebar) */}
+        {selectedPatient && onOpenTrialDiscovery && (
+          <div className="mb-8 rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50/90 to-white p-6 shadow-sm flex flex-col">
+            <div className="flex items-start gap-3">
+              <div className="w-11 h-11 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
+                <FlaskConical className="w-5 h-5 text-violet-700" />
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-semibold uppercase tracking-wide">
-                PD-1 Checkpoint Inhibitor
-              </span>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">
+                  {trialQualifiedPatientIds.length > 0
+                    ? "Qualified patients for trials"
+                    : "Clinical trial keyword discovery"}
+                </h3>
+                <p className="text-sm text-gray-600 mt-1 max-w-xl">
+                  {trialQualifiedPatientIds.length > 0 ? (
+                    <>
+                      {trialQualifiedPatientIds.length} patient{trialQualifiedPatientIds.length !== 1 ? "s" : ""} from your cohort
+                      {cohortPatientCount > 0 ? (
+                        <>
+                          {" "}
+                          (of {cohortPatientCount} selected)
+                        </>
+                      ) : null}{" "}
+                      met your trial matching criteria. Explore keyword nodes with the qualified list alongside.
+                    </>
+                  ) : (
+                    <>
+                      Open Discovery on the Keywords tab to explore BLA trial terms, connections, and the qualified
+                      cohort sidebar.{" "}
+                      {cohortPatientCount > 0
+                        ? "Run trial matching from onboarding to highlight which cohort members meet your criteria."
+                        : "Add patients to your cohort to compare qualification across the list."}
+                    </>
+                  )}
+                </p>
+              </div>
             </div>
-
-            {qualifiedTrialsForUi.length > 0 ? (
-              <>
-                <p className="text-sm text-gray-800 mb-4">
-                  <strong>{selectedPatient.name}</strong> has been evaluated against Keytruda eligibility criteria
-                  and is potentially qualified for{" "}
-                  <span className="font-semibold text-emerald-700">{qualifiedTrialsForUi.length}</span> active trial
-                  {qualifiedTrialsForUi.length !== 1 ? "s" : ""}. Review the full qualification report for detailed criteria breakdown.
-                </p>
-                {onViewQualificationReport && (
-                  <button
-                    type="button"
-                    onClick={onViewQualificationReport}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium transition-colors"
-                  >
-                    <FileText className="w-4 h-4" />
-                    View Qualification Report
-                  </button>
-                )}
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-gray-700 mb-4">
-                  No exact trial match for current diagnoses. A Keytruda qualification assessment may still reveal eligibility.
-                </p>
-                {onViewQualificationReport && (
-                  <button
-                    type="button"
-                    onClick={onViewQualificationReport}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium transition-colors"
-                  >
-                    <FileText className="w-4 h-4" />
-                    View Qualification Report
-                  </button>
-                )}
-              </>
-            )}
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={onOpenTrialDiscovery}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold transition-colors"
+              >
+                <Network className="w-4 h-4" />
+                Open trial discovery
+              </button>
+            </div>
           </div>
         )}
 
@@ -383,6 +414,13 @@ export default function DashboardPage({
           </div>
         </>
       )}
+
+      <MyPatientsDialog
+        open={myPatientsOpen}
+        onOpenChange={setMyPatientsOpen}
+        patients={patientsForDialog}
+        onChangePatient={onChangePatient}
+      />
     </div>
   );
 }
