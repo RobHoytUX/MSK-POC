@@ -31,12 +31,13 @@ import { useAuth } from '../lib/AuthContext';
 import ProfilePanel from './ProfilePanel';
 import NotificationsPanel from './NotificationsPanel';
 import { Patient, patients } from '../lib/patients';
+import { getDiscoveryTimelineForPatient } from "../lib/discoveryTimeline";
 import mapsWhiteLogo from '../src/assets/maps-white.png';
 
 interface TimelineEvent {
   id: string;
   date: string;
-  title: "Initial Diagnosis" | "Genetic Testing" | "Staging Update" | "Chemotherapy Initiated" | "Radiation Planning" | "Immunotherapy" | "Surgery Scheduled" | "Tumor Markers" | "CT Scan" | "Cardiac Function" | "PET Scan" | "Neutropenia" | "Peripheral Neuropathy" | "Fatigue Management" | "CBC Panel" | "Liver Function" | "Kidney Function" | "Hormone Receptors" | "Treatment Consent" | "Care Plan Updated" | "Progress Notes" | "Surgical Consent";
+  title: string;
   description: string;
   details: string;
   severity?: "Emergency" | "Severe" | "Follow Up";
@@ -498,24 +499,28 @@ export default function CancerTreatmentDashboard({
     [trialKeywordCanvasPatientId]
   );
 
-  /** Trial keyword view + cohort sidebar: Open Chart shows the patient selected in the cohort list. */
+  /** Discovery cohort sidebar (Timeline or Keywords): Open Chart uses the selected cohort patient. */
   const patientForGlobalChartPanel = useMemo(() => {
-    if (
-      activeView === "timeline" &&
-      discoveryTab === "keywords" &&
-      trialDiscoverySidebarOpen &&
-      trialKeywordCanvasPatient
-    ) {
+    if (activeView === "timeline" && trialDiscoverySidebarOpen && trialKeywordCanvasPatient) {
       return trialKeywordCanvasPatient;
     }
     return selectedPatient;
-  }, [
-    activeView,
-    discoveryTab,
-    trialDiscoverySidebarOpen,
-    trialKeywordCanvasPatient,
-    selectedPatient,
-  ]);
+  }, [activeView, trialDiscoverySidebarOpen, trialKeywordCanvasPatient, selectedPatient]);
+
+  /** Timeline rows reflect the cohort selection when the sidebar is open; otherwise the primary patient. */
+  const timelinePatientForData = useMemo(() => {
+    if (trialDiscoverySidebarOpen && trialKeywordCanvasPatient) {
+      return trialKeywordCanvasPatient;
+    }
+    return selectedPatient ?? null;
+  }, [trialDiscoverySidebarOpen, trialKeywordCanvasPatient, selectedPatient]);
+
+  const discoveryTimelineData = useMemo(() => {
+    if (timelinePatientForData) {
+      return getDiscoveryTimelineForPatient(timelinePatientForData);
+    }
+    return timelineData;
+  }, [timelinePatientForData]);
 
   /** Trial keyword canvas + cohort sidebar (same as dashboard “trial discovery”). */
   const openTrialDiscoveryKeywordsView = useCallback(() => {
@@ -572,15 +577,17 @@ export default function CancerTreatmentDashboard({
   }, [activeView, featureScope, isViewAllowed]);
 
   useEffect(() => {
-    if (discoveryTab !== "keywords") setTrialDiscoverySidebarOpen(false);
+    if (discoveryTab !== "keywords") {
+      setTrialKeywordAnalysis(null);
+    }
   }, [discoveryTab]);
 
   useEffect(() => {
-    if (discoveryTab !== "keywords" || !trialDiscoverySidebarOpen) {
+    if (!trialDiscoverySidebarOpen) {
       setTrialKeywordAnalysis(null);
       setTrialKeywordCanvasPatientId(null);
     }
-  }, [discoveryTab, trialDiscoverySidebarOpen]);
+  }, [trialDiscoverySidebarOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -807,12 +814,12 @@ export default function CancerTreatmentDashboard({
   // Filter timeline data based on active time range and search/keyword filters
   const filteredData = useMemo(() => {
     const timeFiltered = {
-      diagnosis: filterEventsByRange(timelineData.diagnosis, startMonth, endMonth, customFrom, customTo),
-      treatment: filterEventsByRange(timelineData.treatment, startMonth, endMonth, customFrom, customTo),
-      monitoring: filterEventsByRange(timelineData.monitoring, startMonth, endMonth, customFrom, customTo),
-      sideEffects: filterEventsByRange(timelineData.sideEffects, startMonth, endMonth, customFrom, customTo),
-      labs: filterEventsByRange(timelineData.labs, startMonth, endMonth, customFrom, customTo),
-      documentation: filterEventsByRange(timelineData.documentation, startMonth, endMonth, customFrom, customTo)
+      diagnosis: filterEventsByRange(discoveryTimelineData.diagnosis, startMonth, endMonth, customFrom, customTo),
+      treatment: filterEventsByRange(discoveryTimelineData.treatment, startMonth, endMonth, customFrom, customTo),
+      monitoring: filterEventsByRange(discoveryTimelineData.monitoring, startMonth, endMonth, customFrom, customTo),
+      sideEffects: filterEventsByRange(discoveryTimelineData.sideEffects, startMonth, endMonth, customFrom, customTo),
+      labs: filterEventsByRange(discoveryTimelineData.labs, startMonth, endMonth, customFrom, customTo),
+      documentation: filterEventsByRange(discoveryTimelineData.documentation, startMonth, endMonth, customFrom, customTo)
     };
 
     // Determine which filter to apply
@@ -842,7 +849,7 @@ export default function CancerTreatmentDashboard({
       labs: timeFiltered.labs.filter(searchFilter),
       documentation: timeFiltered.documentation.filter(searchFilter)
     };
-  }, [activeTimeRange, startMonth, endMonth, searchQuery, selectedKeyword, customFrom, customTo]);
+  }, [discoveryTimelineData, activeTimeRange, startMonth, endMonth, searchQuery, selectedKeyword, customFrom, customTo]);
 
   return (
     <div className="flex h-screen bg-slate-50">
@@ -867,6 +874,11 @@ export default function CancerTreatmentDashboard({
               onClick={() => {
                 setActiveView("timeline");
                 setShowKeywordsTree(false);
+                setDiscoveryTab("timeline");
+                if (cohortPatientIds.length > 0) {
+                  setTrialDiscoverySidebarOpen(true);
+                  setTrialKeywordCanvasPatientId((prev) => prev ?? selectedPatient?.id ?? cohortPatientIds[0] ?? null);
+                }
               }}
               className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-lg ${
                 (activeView === "timeline" || showKeywordsTree) ? "bg-white" : "bg-white/10 hover:bg-white/20 hover:scale-110"
@@ -1057,9 +1069,19 @@ export default function CancerTreatmentDashboard({
                     {(["timeline", "keywords"] as const).map((tab) => (
                       <button
                         key={tab}
-                        onClick={() =>
-                          tab === "keywords" ? openTrialDiscoveryKeywordsView() : setDiscoveryTab("timeline")
-                        }
+                        onClick={() => {
+                          if (tab === "keywords") {
+                            openTrialDiscoveryKeywordsView();
+                          } else {
+                            setDiscoveryTab("timeline");
+                            if (cohortPatientIds.length > 0) {
+                              setTrialDiscoverySidebarOpen(true);
+                              setTrialKeywordCanvasPatientId((prev) =>
+                                prev ?? selectedPatient?.id ?? cohortPatientIds[0] ?? null
+                              );
+                            }
+                          }
+                        }}
                         className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all capitalize ${
                           discoveryTab === tab
                             ? "bg-indigo-600 text-white shadow-sm"
@@ -1320,16 +1342,25 @@ export default function CancerTreatmentDashboard({
                       selectedPatientId={trialKeywordCanvasPatientId}
                       onSelectPatient={(id) => {
                         setTrialKeywordCanvasPatientId(id);
-                        setTrialKeywordAnalysis(null);
+                        if (discoveryTab === "keywords") setTrialKeywordAnalysis(null);
                       }}
+                      purpose="keywords"
                     />
                   </div>
                 )}
               </div>
             )}
 
-            {/* Timeline Content */}
-            {discoveryTab === "timeline" && <div className="flex-1 overflow-auto bg-white">
+            {/* Timeline Content + cohort sidebar */}
+            {discoveryTab === "timeline" && (
+              <div
+                className={`flex-1 overflow-hidden flex min-h-0 ${
+                  trialDiscoverySidebarOpen
+                    ? "flex-col lg:flex-row bg-gradient-to-br from-slate-50 to-violet-50/40"
+                    : "flex-col"
+                }`}
+              >
+              <div className="flex-1 min-w-0 min-h-0 overflow-auto bg-white">
               <div className="px-8 py-6">
                 {/* Date Headers */}
                 <div className="flex items-center mb-8">
@@ -1712,7 +1743,24 @@ export default function CancerTreatmentDashboard({
                 </div>
 
               </div>
-            </div>}
+              </div>
+
+                {trialDiscoverySidebarOpen && (
+                  <div className="w-full lg:w-[min(420px,40vw)] shrink-0 flex flex-col min-h-0 max-h-[45vh] lg:max-h-none">
+                    <QualifiedTrialPatientsSidebar
+                      patients={
+                        cohortPatientsList.length > 0 ? cohortPatientsList : trialQualifiedPatientsList
+                      }
+                      selectedPatientId={trialKeywordCanvasPatientId}
+                      onSelectPatient={(id) => {
+                        setTrialKeywordCanvasPatientId(id);
+                      }}
+                      purpose="timeline"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </>
         ) : activeView === "trials" ? (
           <div className="relative h-full">

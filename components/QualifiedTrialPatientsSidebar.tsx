@@ -12,12 +12,15 @@ interface QualifiedTrialPatientsSidebarProps {
   /** Highlights the row; `null` means full keyword map (all patients). */
   selectedPatientId?: string | null;
   onSelectPatient?: (patientId: string | null) => void;
+  /** Discovery Timeline vs Keywords copy in the header blurb. */
+  purpose?: "keywords" | "timeline";
 }
 
 export default function QualifiedTrialPatientsSidebar({
   patients: list,
   selectedPatientId = null,
   onSelectPatient,
+  purpose = "keywords",
 }: QualifiedTrialPatientsSidebarProps) {
   const [q, setQ] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("percentage");
@@ -70,8 +73,10 @@ export default function QualifiedTrialPatientsSidebar({
           <h2 className="text-lg font-semibold text-gray-900">Cohort patients</h2>
         </div>
         <p className="text-sm text-gray-500 mb-4">
-          All cohort members ({list.length}) · 0–100 Keytruda qualification confidence — select one to filter the
-          keyword map
+          All cohort members ({list.length}) · 0–100 Keytruda qualification confidence — select one to{" "}
+          {purpose === "timeline"
+            ? "view that patient’s timeline and care events"
+            : "filter the keyword map"}
         </p>
       </div>
 
