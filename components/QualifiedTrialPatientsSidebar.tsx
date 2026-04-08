@@ -12,15 +12,12 @@ interface QualifiedTrialPatientsSidebarProps {
   /** Highlights the row; `null` means full keyword map (all patients). */
   selectedPatientId?: string | null;
   onSelectPatient?: (patientId: string | null) => void;
-  /** Discovery Timeline vs Keywords copy in the header blurb. */
-  purpose?: "keywords" | "timeline";
 }
 
 export default function QualifiedTrialPatientsSidebar({
   patients: list,
   selectedPatientId = null,
   onSelectPatient,
-  purpose = "keywords",
 }: QualifiedTrialPatientsSidebarProps) {
   const [q, setQ] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("percentage");
@@ -70,7 +67,7 @@ export default function QualifiedTrialPatientsSidebar({
   return (
     <aside className="flex flex-col h-full w-full min-h-0 bg-transparent">
       <div className="shrink-0 px-5 pt-4 pb-3 lg:px-8">
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2">
           {isSinglePatient ? (
             <User className="w-5 h-5 text-indigo-600 shrink-0" aria-hidden />
           ) : (
@@ -80,23 +77,6 @@ export default function QualifiedTrialPatientsSidebar({
             {isSinglePatient ? "Patient" : "Cohort patients"}
           </h2>
         </div>
-        <p className="text-sm text-gray-500 mb-4">
-          {isSinglePatient ? (
-            <>
-              This patient · 0–100 Keytruda qualification confidence —{" "}
-              {purpose === "timeline"
-                ? "view their timeline and care events in Discovery."
-                : "the keyword map uses this patient’s profile."}
-            </>
-          ) : (
-            <>
-              All cohort members ({list.length}) · 0–100 Keytruda qualification confidence — select one to{" "}
-              {purpose === "timeline"
-                ? "view that patient’s timeline and care events"
-                : "filter the keyword map"}
-            </>
-          )}
-        </p>
       </div>
 
       <div className="shrink-0 px-5 pb-3 space-y-3 lg:px-8">
@@ -141,7 +121,7 @@ export default function QualifiedTrialPatientsSidebar({
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto pl-5 lg:pl-8 pr-[calc(1.25rem+6px)] lg:pr-[calc(2rem+6px)] pb-6 space-y-2 min-h-0 [scrollbar-width:thin] [scrollbar-color:rgb(148_163_184)_transparent] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-400 hover:[&::-webkit-scrollbar-thumb]:bg-gray-500">
+      <div className="flex-1 overflow-y-auto pl-5 lg:pl-8 pr-[calc(1.25rem+6px)] lg:pr-[calc(2rem+6px)] pt-3 pb-6 space-y-2 min-h-0 [scrollbar-width:thin] [scrollbar-color:rgb(148_163_184)_transparent] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-400 hover:[&::-webkit-scrollbar-thumb]:bg-gray-500">
         {sortedFiltered.map((p) => {
           const initials = p.name
             .split(" ")

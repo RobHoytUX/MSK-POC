@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, RefreshCw, CalendarDays, Bell, SlidersHorizontal, Layers3, Stethoscope, Microscope, UserRound, UsersRound, PanelRightOpen, ListFilter } from "lucide-react";
+import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, CalendarDays, Bell, SlidersHorizontal, Layers3, Stethoscope, Microscope, UserRound, UsersRound, PanelRightOpen, ListFilter, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -322,6 +322,116 @@ export const getKeywordColor = (color: string) => {
   return colors[color as keyof typeof colors] || colors.blue;
 };
 
+type TimelineKeywordChip = (typeof keywords)[number];
+
+function TimelineKeywordChipsScroll({
+  keywordList,
+  selectedKeyword,
+  onSelectKeyword,
+  onClear,
+}: {
+  keywordList: TimelineKeywordChip[];
+  selectedKeyword: string | null;
+  onSelectKeyword: (label: string) => void;
+  onClear: () => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [hasOverflow, setHasOverflow] = useState(false);
+  const [canScroll, setCanScroll] = useState({ left: false, right: false });
+
+  const updateScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    const overflow = scrollWidth > clientWidth + 2;
+    setHasOverflow(overflow);
+    setCanScroll({
+      left: overflow && scrollLeft > 2,
+      right: overflow && scrollLeft + clientWidth < scrollWidth - 2,
+    });
+  }, []);
+
+  useEffect(() => {
+    updateScroll();
+    const el = scrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => updateScroll());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [keywordList.length, selectedKeyword, updateScroll]);
+
+  const scrollBy = (delta: number) => {
+    scrollRef.current?.scrollBy({ left: delta, behavior: "smooth" });
+  };
+
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      <div
+        ref={scrollRef}
+        onScroll={updateScroll}
+        className="flex flex-1 min-w-0 items-center gap-3 overflow-x-auto overflow-y-hidden py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {keywordList.map((keyword) => (
+          <Popover key={keyword.id}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                onClick={() => onSelectKeyword(keyword.label)}
+                className={`shrink-0 px-3 py-1 rounded-full text-xs border transition-all ${
+                  selectedKeyword === keyword.label ? "ring-2 ring-indigo-500 ring-offset-1" : ""
+                } ${getKeywordColor(keyword.color)}`}
+              >
+                {keyword.label}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80" side="bottom" align="start">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-gray-900">{keyword.label}</h4>
+                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{keyword.category}</span>
+                </div>
+                <p className="text-gray-600 text-sm leading-relaxed">{keyword.description}</p>
+              </div>
+            </PopoverContent>
+          </Popover>
+        ))}
+        {selectedKeyword && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="shrink-0 flex items-center gap-1 px-3 py-1 rounded-full text-xs text-white bg-indigo-600 hover:bg-indigo-700 border border-indigo-600 transition-colors"
+          >
+            <X className="w-3 h-3" />
+            Clear filter
+          </button>
+        )}
+      </div>
+      {hasOverflow && (
+        <div className="flex shrink-0 items-center gap-0.5 border-l border-gray-200 pl-2 ml-1">
+          <button
+            type="button"
+            aria-label="Scroll keywords left"
+            onClick={() => scrollBy(-220)}
+            disabled={!canScroll.left}
+            className="p-1.5 rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:pointer-events-none"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            aria-label="Scroll keywords right"
+            onClick={() => scrollBy(220)}
+            disabled={!canScroll.right}
+            className="p-1.5 rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:pointer-events-none"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Function to convert date string to month index
 const getMonthIndex = (dateStr: string): number => {
   const monthMap: Record<string, number> = {
@@ -474,8 +584,6 @@ export default function CancerTreatmentDashboard({
   const [chatInput, setChatInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState("30 minutes ago");
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const navInitRef = useRef<PersistedNav | null>(null);
   if (navInitRef.current === null) {
     navInitRef.current = loadNavState();
@@ -733,19 +841,6 @@ export default function CancerTreatmentDashboard({
     setDoctorFeedRefreshTrigger((t) => t + 1);
     setPendingPostId(null);
   }, [pendingPostId]);
-
-  const handleRefreshKeywords = () => {
-    setIsRefreshing(true);
-    // Simulate AI refresh
-    setTimeout(() => {
-      setIsRefreshing(false);
-      setLastUpdated("Just now");
-      // Reset to relative time after a moment
-      setTimeout(() => {
-        setLastUpdated("30 minutes ago");
-      }, 3000);
-    }, 1000);
-  };
 
   const renderHeaderActions = () => (
     <>
@@ -1172,151 +1267,6 @@ export default function CancerTreatmentDashboard({
               </div>
             </div>
 
-            {/* Timeline-only strip — sits below Discovery header like TrialKeywordCanvas title row; pushes timeline + sidebar down */}
-            {discoveryTab === "timeline" && (
-              <div className="shrink-0 bg-white border-b border-gray-200 z-10 px-5 py-4 lg:px-8 space-y-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
-                      {(["1m", "3m", "6m", "1y"] as const).map((range) => (
-                        <button
-                          key={range}
-                          onClick={() => {
-                            setActiveTimeRange(range);
-                            setIsCustomDatePickerOpen(false);
-                          }}
-                          className={`px-4 py-1.5 rounded-md transition-all ${
-                            activeTimeRange === range
-                              ? "bg-white shadow-sm text-gray-900"
-                              : "text-gray-600 hover:text-gray-900"
-                          }`}
-                        >
-                          {range}
-                        </button>
-                      ))}
-                    </div>
-
-                    <Popover open={isCustomDatePickerOpen} onOpenChange={setIsCustomDatePickerOpen}>
-                      <PopoverTrigger asChild>
-                        <button
-                          onClick={() => {
-                            setActiveTimeRange("custom");
-                            setIsCustomDatePickerOpen(true);
-                          }}
-                          className={`px-4 py-1.5 rounded-lg transition-all flex items-center gap-2 ${
-                            activeTimeRange === "custom"
-                              ? "bg-indigo-600 text-white shadow-sm"
-                              : "bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200"
-                          }`}
-                        >
-                          <CalendarDays className="w-4 h-4" />
-                          {customDateRange.from && customDateRange.to ? (
-                            <>
-                              {format(customDateRange.from, "MMM d")} - {format(customDateRange.to, "MMM d")}
-                            </>
-                          ) : (
-                            "Custom Range"
-                          )}
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <div className="p-4">
-                          <Calendar
-                            mode="range"
-                            selected={{ from: customDateRange.from, to: customDateRange.to }}
-                            onSelect={(range) => {
-                              if (range?.from && range?.to) {
-                                setCustomDateRange({ from: range.from, to: range.to });
-                                setActiveTimeRange("custom");
-                                setIsCustomDatePickerOpen(false);
-                              } else if (range?.from) {
-                                setCustomDateRange({ from: range.from, to: undefined });
-                              }
-                            }}
-                            numberOfMonths={2}
-                            className="rounded-md border-0"
-                          />
-                          {customDateRange.from && customDateRange.to && (
-                            <div className="mt-4 pt-4 border-t border-gray-200 flex items-center justify-between gap-2">
-                              <div className="text-sm text-gray-600">
-                                <span className="font-medium">From:</span> {format(customDateRange.from, "MMM d, yyyy")}
-                                <br />
-                                <span className="font-medium">To:</span> {format(customDateRange.to, "MMM d, yyyy")}
-                              </div>
-                              <button
-                                onClick={() => {
-                                  setCustomDateRange({ from: undefined, to: undefined });
-                                  setActiveTimeRange("1y");
-                                  setIsCustomDatePickerOpen(false);
-                                }}
-                                className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
-                              >
-                                Clear
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 flex-wrap">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {keywords.map((keyword) => (
-                      <Popover key={keyword.id}>
-                        <PopoverTrigger asChild>
-                          <button
-                            onClick={() => setSelectedKeyword(keyword.label)}
-                            className={`px-3 py-1 rounded-full text-xs border transition-all ${
-                              selectedKeyword === keyword.label
-                                ? "ring-2 ring-indigo-500 ring-offset-1"
-                                : ""
-                            } ${getKeywordColor(keyword.color)}`}
-                          >
-                            {keyword.label}
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-80" side="bottom" align="start">
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <h4 className="text-gray-900">{keyword.label}</h4>
-                              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                                {keyword.category}
-                              </span>
-                            </div>
-                            <p className="text-gray-600 text-sm leading-relaxed">{keyword.description}</p>
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    ))}
-                    {selectedKeyword && (
-                      <button
-                        onClick={() => setSelectedKeyword(null)}
-                        className="flex items-center gap-1 px-3 py-1 rounded-full text-xs text-white bg-indigo-600 hover:bg-indigo-700 border border-indigo-600 transition-colors"
-                      >
-                        <X className="w-3 h-3" />
-                        Clear filter
-                      </button>
-                    )}
-                  </div>
-                  <div className="ml-auto flex items-center gap-2">
-                    <span className="text-xs text-gray-400">Updated {lastUpdated}</span>
-                    <button
-                      onClick={handleRefreshKeywords}
-                      className={`p-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 transition-all ${
-                        isRefreshing ? "animate-spin" : ""
-                      }`}
-                      title="Refresh keywords"
-                      disabled={isRefreshing}
-                    >
-                      <RefreshCw className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Keywords tab — multi-patient + sidebar: FDA trial canvas; otherwise 6-column category graph (single-patient keeps WaveVisualization even with sidebar) */}
             {discoveryTab === "keywords" && (
               <div
@@ -1367,14 +1317,13 @@ export default function CancerTreatmentDashboard({
                         setTrialKeywordCanvasPatientId(id);
                         if (discoveryTab === "keywords") setTrialKeywordAnalysis(null);
                       }}
-                      purpose="keywords"
                     />
                   </div>
                 )}
               </div>
             )}
 
-            {/* Timeline Content + cohort sidebar */}
+            {/* Timeline + cohort sidebar — time range & chips sit in left column only so sidebar aligns with Keywords view */}
             {discoveryTab === "timeline" && (
               <div
                 className={`flex-1 overflow-hidden flex min-h-0 ${
@@ -1383,7 +1332,105 @@ export default function CancerTreatmentDashboard({
                     : "flex-col"
                 }`}
               >
-              <div className="flex-1 min-w-0 min-h-0 overflow-auto bg-white">
+              <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-white">
+                <div className="shrink-0 px-5 py-4 lg:px-8">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+                        {(["1m", "3m", "6m", "1y"] as const).map((range) => (
+                          <button
+                            key={range}
+                            type="button"
+                            onClick={() => {
+                              setActiveTimeRange(range);
+                              setIsCustomDatePickerOpen(false);
+                            }}
+                            className={`px-4 py-1.5 rounded-md transition-all ${
+                              activeTimeRange === range
+                                ? "bg-white shadow-sm text-gray-900"
+                                : "text-gray-600 hover:text-gray-900"
+                            }`}
+                          >
+                            {range}
+                          </button>
+                        ))}
+                      </div>
+                      <Popover open={isCustomDatePickerOpen} onOpenChange={setIsCustomDatePickerOpen}>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveTimeRange("custom");
+                              setIsCustomDatePickerOpen(true);
+                            }}
+                            className={`px-4 py-1.5 rounded-lg transition-all flex items-center gap-2 ${
+                              activeTimeRange === "custom"
+                                ? "bg-indigo-600 text-white shadow-sm"
+                                : "bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+                            }`}
+                          >
+                            <CalendarDays className="w-4 h-4" />
+                            {customDateRange.from && customDateRange.to ? (
+                              <>
+                                {format(customDateRange.from, "MMM d")} - {format(customDateRange.to, "MMM d")}
+                              </>
+                            ) : (
+                              "Custom Range"
+                            )}
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <div className="p-4">
+                            <Calendar
+                              mode="range"
+                              selected={{ from: customDateRange.from, to: customDateRange.to }}
+                              onSelect={(range) => {
+                                if (range?.from && range?.to) {
+                                  setCustomDateRange({ from: range.from, to: range.to });
+                                  setActiveTimeRange("custom");
+                                  setIsCustomDatePickerOpen(false);
+                                } else if (range?.from) {
+                                  setCustomDateRange({ from: range.from, to: undefined });
+                                }
+                              }}
+                              numberOfMonths={2}
+                              className="rounded-md border-0"
+                            />
+                            {customDateRange.from && customDateRange.to && (
+                              <div className="mt-4 pt-4 border-t border-gray-200 flex items-center justify-between gap-2">
+                                <div className="text-sm text-gray-600">
+                                  <span className="font-medium">From:</span> {format(customDateRange.from, "MMM d, yyyy")}
+                                  <br />
+                                  <span className="font-medium">To:</span> {format(customDateRange.to, "MMM d, yyyy")}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCustomDateRange({ from: undefined, to: undefined });
+                                    setActiveTimeRange("1y");
+                                    setIsCustomDatePickerOpen(false);
+                                  }}
+                                  className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                                >
+                                  Clear
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
+                </div>
+                <div className="shrink-0 px-5 py-3 lg:px-8">
+                  <TimelineKeywordChipsScroll
+                    keywordList={keywords}
+                    selectedKeyword={selectedKeyword}
+                    onSelectKeyword={setSelectedKeyword}
+                    onClear={() => setSelectedKeyword(null)}
+                  />
+                </div>
+                <div className="flex-1 min-h-0 overflow-auto bg-white">
               <div className="px-5 py-3 lg:px-8 lg:py-5">
                 {/* Date Headers */}
                 <div className="flex items-center mb-8">
@@ -1767,6 +1814,7 @@ export default function CancerTreatmentDashboard({
 
               </div>
               </div>
+              </div>
 
                 {trialDiscoverySidebarOpen && (
                   <div className="w-full lg:w-[min(420px,40vw)] shrink-0 flex flex-col min-h-0 max-h-[45vh] lg:max-h-none">
@@ -1778,7 +1826,6 @@ export default function CancerTreatmentDashboard({
                       onSelectPatient={(id) => {
                         setTrialKeywordCanvasPatientId(id);
                       }}
-                      purpose="timeline"
                     />
                   </div>
                 )}
