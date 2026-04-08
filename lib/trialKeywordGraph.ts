@@ -113,10 +113,21 @@ export interface CategoryColumnHeader {
   labelY: number;
 }
 
-export function layoutTrialKeywords(keywords: FdaKeyword[]): {
+export interface LayoutTrialKeywordsOptions {
+  /**
+   * When wider than the intrinsic layout, extra space is added between columns (same 168px nodes)
+   * instead of scaling — keeps node and text size identical to a narrow / single-patient view.
+   */
+  targetWidth?: number;
+}
+
+export function layoutTrialKeywords(
+  keywords: FdaKeyword[],
+  options?: LayoutTrialKeywordsOptions
+): {
   positions: Map<string, KeywordLayoutPos>;
   contentHeight: number;
-  /** Minimum SVG width so columns do not overlap (use with horizontal scroll on narrow viewports). */
+  /** SVG width (matches targetWidth when expanded, else intrinsic minimum). */
   contentWidth: number;
   categoryHeaders: CategoryColumnHeader[];
 } {
@@ -131,12 +142,30 @@ export function layoutTrialKeywords(keywords: FdaKeyword[]): {
   const activeCats = [...byCat.keys()].sort(
     (a, b) => (CAT_ORDER_IDX.get(a) ?? 99) - (CAT_ORDER_IDX.get(b) ?? 99)
   );
+  const n = activeCats.length;
   const colW = 168;
-  const nodeGapY = 10;
+  /** Space between stacked pills in a column — wider than before so same-column edges read like the Wave grid. */
+  const nodeGapY = 32;
   const headerH = 56;
-  const padX = 32;
-  /** Fixed gap — never compress columns into overlapping x ranges (was the main canvas bug on <~900px width). */
-  const gapX = activeCats.length <= 1 ? 0 : 16;
+  const basePadX = 32;
+  /** Base gap — never compress columns into overlapping x ranges. */
+  const baseGapX = n <= 1 ? 0 : 16;
+
+  const intrinsicWidth = basePadX * 2 + n * colW + Math.max(0, n - 1) * baseGapX;
+
+  let padX = basePadX;
+  let gapX = baseGapX;
+  const tw = options?.targetWidth;
+  if (typeof tw === "number" && tw > 0 && tw > intrinsicWidth) {
+    const extra = tw - intrinsicWidth;
+    if (n > 1) {
+      gapX = baseGapX + extra / (n - 1);
+    } else if (n === 1) {
+      padX = basePadX + extra / 2;
+    }
+  }
+
+  const contentWidth = padX * 2 + n * colW + Math.max(0, n - 1) * gapX;
 
   const categoryHeaders: CategoryColumnHeader[] = [];
   const labelY = padX + 18;
@@ -158,9 +187,6 @@ export function layoutTrialKeywords(keywords: FdaKeyword[]): {
       y += h + nodeGapY;
     });
   });
-
-  const n = activeCats.length;
-  const contentWidth = padX * 2 + n * colW + Math.max(0, n - 1) * gapX;
 
   return { positions, contentHeight: maxBottom + padX, contentWidth, categoryHeaders };
 }

@@ -19,6 +19,8 @@ interface DashboardPageProps {
   cohortPatientCount?: number;
   /** Opens Discovery on Keywords with trial keyword strip + qualified cohort sidebar. */
   onOpenTrialDiscovery?: () => void;
+  /** Single-patient cohort: open patient chart in the same side panel as “Open Chart” (not full-page). */
+  onOpenPatientChart?: () => void;
 }
 
 const cards = [
@@ -61,6 +63,7 @@ export default function DashboardPage({
   trialQualifiedPatientIds = [],
   cohortPatientCount = 0,
   onOpenTrialDiscovery,
+  onOpenPatientChart,
 }: DashboardPageProps) {
   const { profile, user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
@@ -233,7 +236,13 @@ export default function DashboardPage({
             </div>
             <button
               type="button"
-              onClick={() => setMyPatientsOpen(true)}
+              onClick={() => {
+                if (patientsForDialog.length === 1 && onOpenPatientChart) {
+                  onOpenPatientChart();
+                } else {
+                  setMyPatientsOpen(true);
+                }
+              }}
               className="w-full text-left rounded-2xl border border-gray-200 bg-gradient-to-br from-indigo-50 to-white shadow-sm p-6 hover:border-indigo-300 hover:shadow-md transition-all group focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
             >
               <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -278,7 +287,7 @@ export default function DashboardPage({
                 </div>
                 <div className="flex flex-col items-end gap-2 shrink-0">
                   <span className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 group-hover:text-indigo-700">
-                    View all
+                    View
                     <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                   </span>
                   <div className="text-right">
@@ -293,8 +302,8 @@ export default function DashboardPage({
           </div>
         )}
 
-        {/* Clinical trial keyword discovery — opens Discovery → Keywords (trial canvas + qualified sidebar) */}
-        {selectedPatient && onOpenTrialDiscovery && (
+        {/* Clinical trial keyword discovery — multi-patient cohort only (single-patient flow skips trial onboarding) */}
+        {selectedPatient && onOpenTrialDiscovery && cohortPatientCount > 1 && (
           <div className="mb-8 rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50/90 to-white p-6 shadow-sm flex flex-col">
             <div className="flex items-start gap-3">
               <div className="w-11 h-11 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
@@ -316,14 +325,14 @@ export default function DashboardPage({
                           (of {cohortPatientCount} selected)
                         </>
                       ) : null}{" "}
-                      met your trial matching criteria. Explore keyword nodes with the qualified list alongside.
+                      met your clinical trial criteria. Explore keyword nodes with the qualified list alongside.
                     </>
                   ) : (
                     <>
                       Open Discovery on the Keywords tab to explore BLA trial terms, connections, and the qualified
                       cohort sidebar.{" "}
                       {cohortPatientCount > 0
-                        ? "Run trial matching from onboarding to highlight which cohort members meet your criteria."
+                        ? "Use clinical trials onboarding to highlight which cohort members meet your criteria."
                         : "Add patients to your cohort to compare qualification across the list."}
                     </>
                   )}

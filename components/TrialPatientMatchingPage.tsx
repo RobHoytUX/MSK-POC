@@ -34,8 +34,8 @@ export default function TrialPatientMatchingPage({
             <div className="flex items-center gap-4">
               <img src={mapsLogo} alt="MAPS logo" className="h-[30px] w-[30px] object-contain shrink-0" />
               <div>
-                <h1 className="text-xl font-semibold text-gray-900">Trial Patient Matching</h1>
-                <p className="text-sm text-gray-500">Define criteria, then review matches in your cohort</p>
+                <h1 className="text-xl font-semibold text-gray-900">Clinical Trials</h1>
+                <p className="text-sm text-gray-500">Define criteria, then compare patients in your cohort</p>
               </div>
             </div>
             <div className="flex items-center gap-3">

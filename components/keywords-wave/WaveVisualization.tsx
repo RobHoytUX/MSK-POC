@@ -40,6 +40,11 @@ interface WaveVisualizationProps {
   activeComparePatientId?: string | null;
   onSetActiveComparePatient?: (id: string | null) => void;
   clinicalTrialMode?: boolean;
+  /**
+   * Discovery Keywords + cohort sidebar: the canvas column is already inset; do not add the
+   * full 440px margin reserved for Connection Analysis (avoids a gray gap beside the canvas).
+   */
+  discoveryCohortSidebarOpen?: boolean;
 }
 
 const medicalData = sharedMedicalData;
@@ -56,6 +61,7 @@ export function WaveVisualization({
   activeComparePatientId = null,
   onSetActiveComparePatient,
   clinicalTrialMode = false,
+  discoveryCohortSidebarOpen = false,
 }: WaveVisualizationProps) {
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set());
@@ -135,49 +141,30 @@ export function WaveVisualization({
   const [svgWidth, setSvgWidth] = useState(1200);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  // Update SVG width on mount and resize
+  // Keep graph layout in sync with the canvas width (flex + Connection Analysis panel)
   useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+
     const updateWidth = () => {
-      if (svgRef.current) {
-        const width = svgRef.current.clientWidth;
-        if (width > 0) {
-          setSvgWidth(width);
-        }
-      }
+      const w = svg.getBoundingClientRect().width;
+      if (w > 0) setSvgWidth(w);
     };
 
     updateWidth();
-    window.addEventListener('resize', updateWidth);
-    const timer = setTimeout(updateWidth, 100);
+    const ro = new ResizeObserver(updateWidth);
+    ro.observe(svg);
+    window.addEventListener("resize", updateWidth);
+    const t1 = setTimeout(updateWidth, 50);
+    const t2 = setTimeout(updateWidth, 200);
 
     return () => {
-      window.removeEventListener('resize', updateWidth);
-      clearTimeout(timer);
+      ro.disconnect();
+      window.removeEventListener("resize", updateWidth);
+      clearTimeout(t1);
+      clearTimeout(t2);
     };
-  }, []);
-
-  useEffect(() => {
-    const updateWidth = () => {
-      if (svgRef.current) {
-        const width = svgRef.current.getBoundingClientRect().width;
-        if (width > 0) {
-          setSvgWidth(width);
-        }
-      }
-    };
-
-    const timer1 = setTimeout(updateWidth, 50);
-    const timer2 = setTimeout(updateWidth, 150);
-    const timer3 = setTimeout(updateWidth, 300);
-    const timer4 = setTimeout(updateWidth, 500);
-
-    return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      clearTimeout(timer3);
-      clearTimeout(timer4);
-    };
-  }, [focusedNode, commentPanelOpen]);
+  }, [focusedNode, commentPanelOpen, discoveryCohortSidebarOpen]);
 
   const handleNodeClick = (nodeId: string) => {
     if (focusedNode === nodeId) {
@@ -548,10 +535,9 @@ export function WaveVisualization({
     if (focusedNode) {
       return (fromId === focusedNode || toId === focusedNode) && isNodeVisible(fromId) && isNodeVisible(toId);
     }
-    if (!hoveredNode && selectedNodes.size === 0) return false;
-    if (hoveredNode === fromId || hoveredNode === toId) return true;
-    if (selectedNodes.has(fromId) || selectedNodes.has(toId)) return true;
-    return false;
+    /** Grid view: show connection strokes only while hovering (no idle faint lines). */
+    if (!hoveredNode) return false;
+    return hoveredNode === fromId || hoveredNode === toId;
   };
 
   const isNodeConnected = (nodeId: string): boolean => {
@@ -724,14 +710,21 @@ export function WaveVisualization({
       </div>
     )}
 
-    <div className="flex-1 bg-gradient-to-br from-gray-50 to-gray-100 overflow-auto relative min-h-0">
-      <div className="min-w-[1200px] h-full relative flex">
-        {/* Main Content Area */}
-        <div className={`flex-1 transition-all duration-150 ${focusedNode ? 'mr-[440px]' : ''}`}>
-
+    <div className="flex-1 bg-gradient-to-br from-gray-50 to-gray-100 overflow-auto relative min-h-0 w-full min-w-0">
+      <div
+        className={`h-full relative flex w-full ${
+          focusedNode ? "min-w-0" : "min-w-[1200px]"
+        }`}
+      >
+        {/* Main Content Area — reserve 440px for fixed Connection Analysis only when no cohort sidebar */}
+        <div
+          className={`flex-1 min-w-0 transition-all duration-150 ${
+            focusedNode && !discoveryCohortSidebarOpen ? "mr-[440px]" : ""
+          }`}
+        >
         {/* Visualization */}
-        <div className="p-8">
-          <div className="relative bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-8 w-full min-w-0 box-border">
+          <div className="relative w-full min-w-0 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             {/* Doctor Connection Banner */}
             {doctorConnectionInfo && (
               <DoctorConnectionBanner
@@ -804,7 +797,7 @@ export function WaveVisualization({
             )}
 
             {/* Flex container for comment panel and canvas */}
-            <div className="flex h-[875px]">
+            <div className="flex h-[875px] w-full min-w-0">
               {/* Comment Panel (pushes content) */}
               <AnimatePresence>
                 {focusedNode && commentPanelOpen && (
@@ -1015,12 +1008,12 @@ export function WaveVisualization({
             </AnimatePresence>
 
             {/* Canvas Area */}
-            <div className="flex-1 p-6 pb-12">
+            <div className="flex-1 min-w-0 w-full p-6 pb-12">
               <svg
                 ref={svgRef}
                 width="100%"
                 height="875"
-                className="overflow-visible"
+                className="block w-full min-w-0 overflow-visible"
               >
               <AnimatePresence mode="wait">
                 {!focusedNode ? (
@@ -1179,7 +1172,7 @@ export function WaveVisualization({
                                 cy={pos.y + nodeHeight / 2}
                                 r={4}
                                 fill={isDisabled ? '#d1d5db' : (isHighlighted || hasActiveConnection ? '#06b6d4' : columnColor.border)}
-                                opacity={isDisabled ? 0.5 : 1}
+                                opacity={hoveredNode ? (isDisabled ? 0.5 : 1) : 0}
                                 className="transition-all duration-200"
                               />
 

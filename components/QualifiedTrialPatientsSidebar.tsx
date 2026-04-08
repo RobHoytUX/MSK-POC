@@ -1,4 +1,4 @@
-import { Search, Users } from "lucide-react";
+import { Search, User, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Patient } from "../lib/patients";
 import { evaluateKeytrudaQualification } from "../lib/keytrudaEligibility";
@@ -44,6 +44,8 @@ export default function QualifiedTrialPatientsSidebar({
     return m;
   }, [list]);
 
+  const isSinglePatient = list.length === 1;
+
   const sortedFiltered = useMemo(() => {
     const arr = [...filtered];
     arr.sort((a, b) => {
@@ -69,14 +71,31 @@ export default function QualifiedTrialPatientsSidebar({
     <aside className="flex flex-col h-full w-full min-h-0 bg-transparent">
       <div className="shrink-0 px-5 pt-4 pb-3 lg:px-8">
         <div className="flex items-center gap-2 mb-1">
-          <Users className="w-5 h-5 text-indigo-600 shrink-0" aria-hidden />
-          <h2 className="text-lg font-semibold text-gray-900">Cohort patients</h2>
+          {isSinglePatient ? (
+            <User className="w-5 h-5 text-indigo-600 shrink-0" aria-hidden />
+          ) : (
+            <Users className="w-5 h-5 text-indigo-600 shrink-0" aria-hidden />
+          )}
+          <h2 className="text-lg font-semibold text-gray-900">
+            {isSinglePatient ? "Patient" : "Cohort patients"}
+          </h2>
         </div>
         <p className="text-sm text-gray-500 mb-4">
-          All cohort members ({list.length}) · 0–100 Keytruda qualification confidence — select one to{" "}
-          {purpose === "timeline"
-            ? "view that patient’s timeline and care events"
-            : "filter the keyword map"}
+          {isSinglePatient ? (
+            <>
+              This patient · 0–100 Keytruda qualification confidence —{" "}
+              {purpose === "timeline"
+                ? "view their timeline and care events in Discovery."
+                : "the keyword map uses this patient’s profile."}
+            </>
+          ) : (
+            <>
+              All cohort members ({list.length}) · 0–100 Keytruda qualification confidence — select one to{" "}
+              {purpose === "timeline"
+                ? "view that patient’s timeline and care events"
+                : "filter the keyword map"}
+            </>
+          )}
         </p>
       </div>
 
@@ -87,8 +106,9 @@ export default function QualifiedTrialPatientsSidebar({
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            disabled={isSinglePatient}
             placeholder="Search name, MRN, diagnosis..."
-            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-white disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
           />
         </div>
         <div className="flex items-center gap-2 min-w-0">
@@ -106,7 +126,7 @@ export default function QualifiedTrialPatientsSidebar({
             <option value="diagnosis">Diagnosis (A → Z)</option>
           </select>
         </div>
-        {onSelectPatient && (
+        {onSelectPatient && !isSinglePatient && (
           <button
             type="button"
             onClick={() => onSelectPatient(null)}

@@ -258,11 +258,11 @@ export function TrialMatchingCriteriaFlow({
               <FlaskConical className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-gray-900">Trial Patient Matching</h2>
+              <h2 className="text-base font-semibold text-gray-900">Clinical Trials</h2>
               <p className="text-xs text-gray-500">
                 {variant === "page"
-                  ? `Find patients by eligibility criteria · ${patientPool.length} selected in cohort`
-                  : "Find patients by eligibility criteria"}
+                  ? `Compare patients by eligibility criteria · ${patientPool.length} selected in cohort`
+                  : "Compare patients by eligibility criteria for clinical trials"}
               </p>
             </div>
           </div>
@@ -599,7 +599,7 @@ export function TrialMatchingCriteriaFlow({
           >
             {step === "biomarkers" ? (
               <>
-                <FlaskConical className="w-4 h-4" /> Find Matching Patients
+                <FlaskConical className="w-4 h-4" /> Compare patients
               </>
             ) : (
               <>

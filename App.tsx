@@ -5,22 +5,47 @@ import AuthPage from "./components/AuthPage";
 import PatientSelectPage from "./components/PatientSelectPage";
 import TrialPatientMatchingPage from "./components/TrialPatientMatchingPage";
 import { Patient, patients } from "./lib/patients";
+import {
+  clearAppSessionStorage,
+  loadAppSession,
+  saveAppSession,
+  type OnboardingPhase,
+} from "./lib/appSession";
 
-type OnboardingPhase = "patients" | "matching" | null;
+const validPatientIds = new Set(patients.map((p) => p.id));
 
 function AppContent() {
   const { user, loading } = useAuth();
+  const [hydrated, setHydrated] = useState(false);
   const [onboardingPhase, setOnboardingPhase] = useState<OnboardingPhase>("patients");
   const [cohortPatientIds, setCohortPatientIds] = useState<string[]>([]);
   const [trialQualifiedPatientIds, setTrialQualifiedPatientIds] = useState<string[]>([]);
 
   useEffect(() => {
+    if (loading) return;
     if (!user) {
+      clearAppSessionStorage();
       setOnboardingPhase("patients");
       setCohortPatientIds([]);
       setTrialQualifiedPatientIds([]);
+      setHydrated(true);
+      return;
     }
-  }, [user]);
+    const s = loadAppSession(validPatientIds);
+    setOnboardingPhase(s.onboardingPhase);
+    setCohortPatientIds(s.cohortPatientIds);
+    setTrialQualifiedPatientIds(s.trialQualifiedPatientIds);
+    setHydrated(true);
+  }, [user, loading]);
+
+  useEffect(() => {
+    if (!user || !hydrated) return;
+    saveAppSession({
+      onboardingPhase,
+      cohortPatientIds,
+      trialQualifiedPatientIds,
+    });
+  }, [user, hydrated, onboardingPhase, cohortPatientIds, trialQualifiedPatientIds]);
 
   const selectedPatient = useMemo<Patient | null>(() => {
     const firstId = cohortPatientIds[0];
@@ -28,7 +53,7 @@ function AppContent() {
     return patients.find((p) => p.id === firstId) ?? null;
   }, [cohortPatientIds]);
 
-  if (loading) {
+  if (loading || !hydrated) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-4">
@@ -50,7 +75,12 @@ function AppContent() {
           initialSelectedPatientIds={cohortPatientIds}
           onContinue={(ids) => {
             setCohortPatientIds(ids);
-            setOnboardingPhase("matching");
+            if (ids.length === 1) {
+              setTrialQualifiedPatientIds([]);
+              setOnboardingPhase(null);
+            } else {
+              setOnboardingPhase("matching");
+            }
           }}
         />
       </div>

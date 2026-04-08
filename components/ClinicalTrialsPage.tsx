@@ -605,7 +605,7 @@ export default function ClinicalTrialsPage({
             ) : null}
             {filteredTrials.length === 0 && listTab === "qualified" && selectedPatient && qualifiedIds.length === 0 ? (
               <p className="text-gray-600 text-sm">
-                No demo trial matches for this patient&apos;s diagnoses. Try Show All or another patient.
+                No demo clinical trial matches for this patient&apos;s diagnoses. Try Show All or another patient.
               </p>
             ) : null}
             {filteredTrials.map((trial) => (

@@ -70,7 +70,7 @@ export default function PatientSelectPage({ onContinue, initialSelectedPatientId
               />
               <div>
                 <h1 className="text-xl font-semibold text-gray-900">Select patients</h1>
-                <p className="text-sm text-gray-500">Choose one or more patients, then continue to trial matching</p>
+                <p className="text-sm text-gray-500">Choose one or more patients, then continue to clinical trials</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -313,9 +313,13 @@ export default function PatientSelectPage({ onContinue, initialSelectedPatientId
           <p className="text-sm text-gray-600">
             {selectedIds.size === 0 ? (
               'Select at least one patient to continue.'
+            ) : selectedIds.size === 1 ? (
+              <>
+                <span className="font-semibold text-gray-900">One</span> patient selected — continue to the Action Board.
+              </>
             ) : (
               <>
-                <span className="font-semibold text-gray-900">{selectedIds.size}</span> patient{selectedIds.size !== 1 ? 's' : ''} will be included in trial matching.
+                <span className="font-semibold text-gray-900">{selectedIds.size}</span> patients will continue to clinical trials.
               </>
             )}
           </p>
@@ -325,7 +329,7 @@ export default function PatientSelectPage({ onContinue, initialSelectedPatientId
             onClick={() => onContinue(Array.from(selectedIds))}
             className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:pointer-events-none text-white text-sm font-semibold transition-colors"
           >
-            Continue to trial matching
+            {selectedIds.size === 1 ? "Next" : "Continue to clinical trials"}
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>

@@ -33,6 +33,7 @@ import NotificationsPanel from './NotificationsPanel';
 import { Patient, patients } from '../lib/patients';
 import { getDiscoveryTimelineForPatient } from "../lib/discoveryTimeline";
 import mapsWhiteLogo from '../src/assets/maps-white.png';
+import { loadNavState, saveNavState, type PersistedNav } from '../lib/appSession';
 
 interface TimelineEvent {
   id: string;
@@ -405,7 +406,7 @@ interface DashboardProps {
   onChangePatient?: () => void;
   /** Patients chosen during onboarding (multi-select). */
   cohortPatientIds?: string[];
-  /** Patients who met trial matching criteria (≥70%, no exclusions) after onboarding. */
+  /** Patients who met clinical trial criteria (≥70%, no exclusions) after onboarding. */
   trialQualifiedPatientIds?: string[];
 }
 
@@ -475,7 +476,11 @@ export default function CancerTreatmentDashboard({
   const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState("30 minutes ago");
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeView, setActiveView] = useState<ActiveView>("dashboard");
+  const navInitRef = useRef<PersistedNav | null>(null);
+  if (navInitRef.current === null) {
+    navInitRef.current = loadNavState();
+  }
+  const [activeView, setActiveView] = useState<ActiveView>(() => navInitRef.current!.activeView as ActiveView);
   const [clinicalTrialsNav, setClinicalTrialsNav] = useState<{
     listTab: "all" | "qualified";
     focusTrialId: string | null;
@@ -487,9 +492,11 @@ export default function CancerTreatmentDashboard({
   });
   const [isScopePickerOpen, setIsScopePickerOpen] = useState(false);
   const [showKeywordsTree, setShowKeywordsTree] = useState(false);
-  const [discoveryTab, setDiscoveryTab] = useState<"timeline" | "keywords">("timeline");
+  const [discoveryTab, setDiscoveryTab] = useState<"timeline" | "keywords">(() => navInitRef.current!.discoveryTab);
   const [, setKeywordsNodeFocused] = useState(false);
-  const [trialDiscoverySidebarOpen, setTrialDiscoverySidebarOpen] = useState(false);
+  const [trialDiscoverySidebarOpen, setTrialDiscoverySidebarOpen] = useState(
+    () => navInitRef.current!.trialDiscoverySidebarOpen
+  );
   const [trialKeywordCanvasPatientId, setTrialKeywordCanvasPatientId] = useState<string | null>(null);
   const [trialKeywordAnalysis, setTrialKeywordAnalysis] = useState<FdaKeyword | null>(null);
 
@@ -568,6 +575,21 @@ export default function CancerTreatmentDashboard({
   useEffect(() => {
     localStorage.setItem("maps-feature-scope", featureScope);
   }, [featureScope]);
+
+  useEffect(() => {
+    saveNavState({
+      activeView,
+      discoveryTab,
+      trialDiscoverySidebarOpen,
+    });
+  }, [activeView, discoveryTab, trialDiscoverySidebarOpen]);
+
+  /** Restore keyword canvas patient when refreshing on Discovery with sidebar open */
+  useEffect(() => {
+    if (activeView !== "timeline" || !trialDiscoverySidebarOpen) return;
+    if (trialKeywordCanvasPatientId || !selectedPatient) return;
+    setTrialKeywordCanvasPatientId(selectedPatient.id);
+  }, [activeView, trialDiscoverySidebarOpen, trialKeywordCanvasPatientId, selectedPatient]);
 
   useEffect(() => {
     if (!isViewAllowed(activeView, featureScope)) {
@@ -951,7 +973,7 @@ export default function CancerTreatmentDashboard({
           className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
             isCriteriaMatchingOpen ? "bg-white shadow-lg scale-105" : "bg-white/10 hover:bg-white/20 hover:scale-110"
           }`}
-          title="Trial Patient Matching"
+          title="Clinical Trials"
         >
           <ListFilter className={`w-6 h-6 ${isCriteriaMatchingOpen ? "text-indigo-600" : "text-white"}`} />
         </button>
@@ -1005,6 +1027,7 @@ export default function CancerTreatmentDashboard({
               setActiveView("timeline");
               openTrialDiscoveryKeywordsView();
             }}
+            onOpenPatientChart={openGlobalChart}
           />
         ) : activeView === "patientChart" ? (
           <PatientChartPage
@@ -1017,8 +1040,8 @@ export default function CancerTreatmentDashboard({
           />
         ) : activeView === "timeline" ? (
           <>
-            {/* Header — sits above Keywords canvas; keep z-index so content never overlaps */}
-            <div className="bg-white relative z-10 shrink-0 shadow-sm">
+            {/* Discovery header — same height for Timeline vs Keywords (tabs row only); divider matches keyword sub-panels */}
+            <div className="bg-white relative z-10 shrink-0 shadow-sm border-b border-gray-200">
               <div className="px-8 py-6">
                 <div className="flex items-center justify-between mb-6">
                   <div>
@@ -1115,7 +1138,7 @@ export default function CancerTreatmentDashboard({
                         className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors disabled:opacity-50 disabled:pointer-events-none"
                       >
                         <FileText className="w-4 h-4" />
-                        View Qualification Report
+                        Clinical Trial Qualification
                       </button>
                     )}
                     <button
@@ -1146,9 +1169,13 @@ export default function CancerTreatmentDashboard({
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
 
-                {/* Time Range Selector — only shown on Timeline tab */}
-                {discoveryTab === "timeline" && <div className="flex items-center justify-between gap-4">
+            {/* Timeline-only strip — sits below Discovery header like TrialKeywordCanvas title row; pushes timeline + sidebar down */}
+            {discoveryTab === "timeline" && (
+              <div className="shrink-0 bg-white border-b border-gray-200 z-10 px-5 py-4 lg:px-8 space-y-4">
+                <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
                       {(["1m", "3m", "6m", "1y"] as const).map((range) => (
@@ -1168,8 +1195,7 @@ export default function CancerTreatmentDashboard({
                         </button>
                       ))}
                     </div>
-                    
-                    {/* Custom Date Range Picker */}
+
                     <Popover open={isCustomDatePickerOpen} onOpenChange={setIsCustomDatePickerOpen}>
                       <PopoverTrigger asChild>
                         <button
@@ -1233,11 +1259,9 @@ export default function CancerTreatmentDashboard({
                       </PopoverContent>
                     </Popover>
                   </div>
-                  
-                </div>}
+                </div>
 
-                {/* Smart Keywords — only on Timeline tab */}
-                {discoveryTab === "timeline" && <div className="flex items-center gap-3 mt-4 flex-wrap">
+                <div className="flex items-center gap-3 flex-wrap">
                   <div className="flex items-center gap-2 flex-wrap">
                     {keywords.map((keyword) => (
                       <Popover key={keyword.id}>
@@ -1245,9 +1269,9 @@ export default function CancerTreatmentDashboard({
                           <button
                             onClick={() => setSelectedKeyword(keyword.label)}
                             className={`px-3 py-1 rounded-full text-xs border transition-all ${
-                              selectedKeyword === keyword.label 
-                                ? 'ring-2 ring-indigo-500 ring-offset-1' 
-                                : ''
+                              selectedKeyword === keyword.label
+                                ? "ring-2 ring-indigo-500 ring-offset-1"
+                                : ""
                             } ${getKeywordColor(keyword.color)}`}
                           >
                             {keyword.label}
@@ -1267,7 +1291,7 @@ export default function CancerTreatmentDashboard({
                       </Popover>
                     ))}
                     {selectedKeyword && (
-                      <button 
+                      <button
                         onClick={() => setSelectedKeyword(null)}
                         className="flex items-center gap-1 px-3 py-1 rounded-full text-xs text-white bg-indigo-600 hover:bg-indigo-700 border border-indigo-600 transition-colors"
                       >
@@ -1277,13 +1301,11 @@ export default function CancerTreatmentDashboard({
                     )}
                   </div>
                   <div className="ml-auto flex items-center gap-2">
-                    <span className="text-xs text-gray-400">
-                      Updated {lastUpdated}
-                    </span>
+                    <span className="text-xs text-gray-400">Updated {lastUpdated}</span>
                     <button
                       onClick={handleRefreshKeywords}
                       className={`p-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 transition-all ${
-                        isRefreshing ? 'animate-spin' : ''
+                        isRefreshing ? "animate-spin" : ""
                       }`}
                       title="Refresh keywords"
                       disabled={isRefreshing}
@@ -1291,11 +1313,11 @@ export default function CancerTreatmentDashboard({
                       <RefreshCw className="w-5 h-5" />
                     </button>
                   </div>
-                </div>}
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Keywords tab — full medical graph, or trial keyword canvas + cohort sidebar */}
+            {/* Keywords tab — multi-patient + sidebar: FDA trial canvas; otherwise 6-column category graph (single-patient keeps WaveVisualization even with sidebar) */}
             {discoveryTab === "keywords" && (
               <div
                 className={`flex-1 overflow-hidden flex min-h-0 ${
@@ -1305,7 +1327,7 @@ export default function CancerTreatmentDashboard({
                 }`}
               >
                 <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden relative">
-                  {trialDiscoverySidebarOpen ? (
+                  {trialDiscoverySidebarOpen && cohortPatientIds.length > 1 ? (
                     <>
                       <TrialKeywordCanvas
                         selectedPatient={trialKeywordCanvasPatient}
@@ -1330,6 +1352,7 @@ export default function CancerTreatmentDashboard({
                       activeComparePatientId={activeComparePatientId}
                       onSetActiveComparePatient={setActiveComparePatientId}
                       clinicalTrialMode={compareIsClinicalTrialMode}
+                      discoveryCohortSidebarOpen={trialDiscoverySidebarOpen}
                     />
                   )}
                 </div>
@@ -1361,7 +1384,7 @@ export default function CancerTreatmentDashboard({
                 }`}
               >
               <div className="flex-1 min-w-0 min-h-0 overflow-auto bg-white">
-              <div className="px-8 py-6">
+              <div className="px-5 py-3 lg:px-8 lg:py-5">
                 {/* Date Headers */}
                 <div className="flex items-center mb-8">
                   <div className="w-40" /> {/* Spacer for row labels */}
