@@ -1,4 +1,4 @@
-# MSK POC - Cancer Treatment Dashboard
+# MAPS
 
 A React-based cancer treatment dashboard application built with Vite, TypeScript, and Tailwind CSS.
 
