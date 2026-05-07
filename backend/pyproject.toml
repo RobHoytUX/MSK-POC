@@ -1,0 +1,17 @@
+[project]
+name = "maps-ingest"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3>=1.34",
+    "opensearch-py>=2.6",
+    "sentence-transformers>=3.0",
+    "torch>=2.0",
+    "tqdm>=4.0",
+]
+
+[tool.uv]
+# Runs on EC2 GPU. Install with CUDA torch:
+#   uv sync --extra-index-url https://download.pytorch.org/whl/cu121
+# Run:
+#   uv run python ingest_pubmed.py
