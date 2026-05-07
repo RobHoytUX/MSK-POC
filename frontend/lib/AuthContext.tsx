@@ -32,6 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!supabaseConfigured) {
+      setUser({ id: 'demo', email: 'demo@demo.com' } as any);
       setLoading(false);
       return;
     }

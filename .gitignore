@@ -1,3 +1,7 @@
+# Docs and specs (not versioned)
+docs/
+specs/
+
 # Logs
 logs
 *.log
@@ -16,6 +20,11 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+
+# Python
+backend/__pycache__/
+backend/*.pyc
+backend/.venv/
 
 # Editor directories and files
 .vscode/*

@@ -2,7 +2,8 @@ import { useState, useRef, useEffect, useCallback, useMemo, type MutableRefObjec
 import { motion, AnimatePresence } from 'motion/react';
 import type { Patient } from '../../lib/patients';
 import { getPatientRelevantNodes } from '../../lib/patientNodeRelevance';
-import { medicalData as sharedMedicalData, type GraphNode } from '../../lib/medicalGraphData';
+import { medicalData as sharedMedicalData, type GraphColumn, type GraphNode } from '../../lib/medicalGraphData';
+import { fetchKeywordGraph } from '../../lib/api';
 import { KEYTRUDA_TRIAL_NODE_IDS } from '../../lib/keytrudaEligibility';
 import { keytrudaFdaKeywords, keywordNodeMap, type FdaKeyword } from '../../lib/keytrudaFdaKeywords';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
@@ -45,9 +46,9 @@ interface WaveVisualizationProps {
    * full 440px margin reserved for Connection Analysis (avoids a gray gap beside the canvas).
    */
   discoveryCohortSidebarOpen?: boolean;
+  /** Patient ID used to fetch the keyword graph from the API. Falls back to static data if unset or fetch fails. */
+  patientId?: string;
 }
-
-const medicalData = sharedMedicalData;
 
 export function WaveVisualization({
   onFocusedNodeChange,
@@ -62,7 +63,15 @@ export function WaveVisualization({
   onSetActiveComparePatient,
   clinicalTrialMode = false,
   discoveryCohortSidebarOpen = false,
+  patientId,
 }: WaveVisualizationProps) {
+  const [medicalData, setMedicalData] = useState<GraphColumn[]>(sharedMedicalData);
+  useEffect(() => {
+    if (!patientId) return;
+    fetchKeywordGraph(patientId)
+      .then(setMedicalData)
+      .catch(() => {/* keep static fallback */});
+  }, [patientId]);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set());
   const [focusedNode, setFocusedNode] = useState<string | null>(null);

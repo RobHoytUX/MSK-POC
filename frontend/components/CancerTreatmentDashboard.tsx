@@ -1104,6 +1104,7 @@ export default function CancerTreatmentDashboard({
             activeComparePatientId={activeComparePatientId}
             onSetActiveComparePatient={setActiveComparePatientId}
             clinicalTrialMode={compareIsClinicalTrialMode}
+            patientId={selectedPatient?.id ?? cohortPatientIds[0]}
           />
         ) : activeView === "dashboard" ? (
           <DashboardPage
@@ -1303,6 +1304,7 @@ export default function CancerTreatmentDashboard({
                       onSetActiveComparePatient={setActiveComparePatientId}
                       clinicalTrialMode={compareIsClinicalTrialMode}
                       discoveryCohortSidebarOpen={trialDiscoverySidebarOpen}
+                      patientId={selectedPatient?.id ?? cohortPatientIds[0]}
                     />
                   )}
                 </div>
