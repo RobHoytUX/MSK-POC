@@ -22,9 +22,11 @@ dist-ssr
 .env.*.local
 
 # Python
-backend/__pycache__/
-backend/*.pyc
-backend/.venv/
+**/__pycache__/
+**/*.pyc
+**/.venv/
+backend/**/.build/
+backend/**/lambda.zip
 
 # Editor directories and files
 .vscode/*

@@ -3,7 +3,9 @@
 ## Structure
 
 - **`frontend/`** — Vite + React (TypeScript) app.
-- **`backend/`** — Python data ingestion scripts and Supabase schema.
+- **`backend/api/`** — FastAPI backend (keyword graph, PubMed cache, research trail).
+- **`backend/pubmed/`** — Python PubMed ingestion scripts and Supabase schema.
+- **`infra/`** — Infrastructure definitions (Terraform / AWS).
 
 ## Getting started
 
@@ -11,8 +13,11 @@
 # Frontend
 cd frontend && npm install && npm run dev
 
-# Backend (Python, via uv)
-cd backend && uv run python ingest_pubmed.py
+# API backend (Python, via uv)
+cd backend/api && uv run python api.py
+
+# PubMed ingestion (Python, via uv)
+cd backend/pubmed && uv run python ingest_pubmed.py
 ```
 
 ## Conventions
@@ -20,3 +25,4 @@ cd backend && uv run python ingest_pubmed.py
 - `docs/` and `specs/` directories are **not committed** — they live locally only.
 - Path alias `@` resolves to `frontend/` root (configured in `vite.config.ts` and `tsconfig.json`).
 - `.env.local` lives in `frontend/.env.local`.
+- `.env` files are gitignored; copy `.env.example` and fill in values.

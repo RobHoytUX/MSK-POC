@@ -1,16 +1,7 @@
-export interface GraphNode {
-  id: string;
-  label: string;
-  connections: string[];
-}
+export type { KeywordNode as GraphNode, KeywordColumn as GraphColumn } from '../src/api/generated'
+import type { KeywordColumn } from '../src/api/generated'
 
-export interface GraphColumn {
-  title: string;
-  count: number;
-  nodes: GraphNode[];
-}
-
-export const medicalData: GraphColumn[] = [
+export const medicalData: KeywordColumn[] = [
   {
     title: 'Patient Data',
     count: 6,
@@ -85,4 +76,4 @@ export const medicalData: GraphColumn[] = [
       { id: 'mon-4', label: 'Follow-up Care', connections: [] },
     ],
   },
-];
+]
