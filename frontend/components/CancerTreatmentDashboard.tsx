@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, CalendarDays, Bell, SlidersHorizontal, Layers3, Stethoscope, Microscope, UserRound, UsersRound, PanelRightOpen, ListFilter, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, CalendarDays, Bell, SlidersHorizontal, Layers3, Stethoscope, Microscope, UserRound, UsersRound, PanelRightOpen, ListFilter, ChevronLeft, ChevronRight, BookOpen } from "lucide-react";
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -13,12 +13,27 @@ import PatientChartPage from "./PatientChartPage";
 import NewsFeedPanel from "./NewsFeedPanel";
 import {
   QuantumPanel,
-  WaveVisualization,
   DoctorFeed,
   ArticleReader,
   type DoctorFeedCanvasBridge,
   type PendingDoctorFeedConnection,
 } from './keywords-wave';
+import KeywordTree from './KeywordTree';
+import KeywordTreePubmedPanel from './KeywordTreePubmedPanel';
+import {
+  findTreeNodeById,
+  pruneHiddenFromTree,
+  type TreeNode,
+} from "../lib/treeTaxonomy";
+import { buildKeywordTreeForPatient, fetchKeywordTree } from '../lib/api';
+import type { ClinicalTimelineResponse } from "../lib/clinicalIntelligence";
+import {
+  fetchClinicalPatientTimeline,
+  postClinicalChat,
+  resolveClinicalPatientId,
+} from "../lib/clinicalIntelligence";
+import ClinicalTimelineSidebar from "./ClinicalTimelineSidebar";
+import ClinicalIntelligenceApiGuideDialog from "./ClinicalIntelligenceApiGuideDialog";
 import ComparePatientPanel from './ComparePatientPanel';
 import PatientComparisonView from './PatientComparisonView';
 import TrialQualificationPanel from './TrialQualificationPanel';
@@ -34,6 +49,14 @@ import { Patient, patients } from '../lib/patients';
 import { getDiscoveryTimelineForPatient } from "../lib/discoveryTimeline";
 import mapsWhiteLogo from '../src/assets/maps-white.png';
 import { loadNavState, saveNavState, type PersistedNav } from '../lib/appSession';
+
+interface ClinicalAiPanelMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  references?: { title: string; pmid: string; journal: string; link: string }[];
+  assistantStatus?: "success" | "blocked";
+}
 
 interface TimelineEvent {
   id: string;
@@ -543,8 +566,9 @@ export default function CancerTreatmentDashboard({
   const [qualificationPanelPatient, setQualificationPanelPatient] = useState<import('../lib/patients').Patient | undefined>(undefined);
   const [isCriteriaMatchingOpen, setIsCriteriaMatchingOpen] = useState(false);
   const [compareSelectedIds, setCompareSelectedIds] = useState<Set<string>>(new Set());
-  const [activeComparePatientId, setActiveComparePatientId] = useState<string | null>(null);
-  const [compareIsClinicalTrialMode, setCompareIsClinicalTrialMode] = useState(false);
+  const [, _setActiveComparePatientId] = useState<string | null>(null);
+  void _setActiveComparePatientId;
+  const [, setCompareIsClinicalTrialMode] = useState(false);
   const compareSelectedPatients = useMemo(
     () => patients.filter((p) => compareSelectedIds.has(p.id)),
     [compareSelectedIds]
@@ -570,7 +594,7 @@ export default function CancerTreatmentDashboard({
   const [articleReaderOpen, setArticleReaderOpen] = useState(false);
   const [readerArticle, setReaderArticle] = useState<{ title: string; description?: string; author?: string } | null>(null);
   const pendingDoctorFeedApplyRef = useRef(0);
-  const [pendingDoctorFeedConnection, setPendingDoctorFeedConnection] = useState<PendingDoctorFeedConnection | null>(null);
+  const [, setPendingDoctorFeedConnection] = useState<PendingDoctorFeedConnection | null>(null);
   const [activeTimeRange, setActiveTimeRange] = useState<"1m" | "3m" | "6m" | "1y" | "custom">("1y");
   const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
@@ -582,6 +606,11 @@ export default function CancerTreatmentDashboard({
   const [isNewsFeedOpen, setIsNewsFeedOpen] = useState(false);
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [chatInput, setChatInput] = useState("");
+  const [clinicalTimelineData, setClinicalTimelineData] = useState<ClinicalTimelineResponse | null>(null);
+  const [clinicalTimelineLoading, setClinicalTimelineLoading] = useState(false);
+  const [clinicalTimelineError, setClinicalTimelineError] = useState<string | null>(null);
+  const [clinicalApiGuideOpen, setClinicalApiGuideOpen] = useState(false);
+  const [clinicalChatPending, setClinicalChatPending] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
   const navInitRef = useRef<PersistedNav | null>(null);
@@ -601,12 +630,80 @@ export default function CancerTreatmentDashboard({
   const [isScopePickerOpen, setIsScopePickerOpen] = useState(false);
   const [showKeywordsTree, setShowKeywordsTree] = useState(false);
   const [discoveryTab, setDiscoveryTab] = useState<"timeline" | "keywords">(() => navInitRef.current!.discoveryTab);
-  const [, setKeywordsNodeFocused] = useState(false);
   const [trialDiscoverySidebarOpen, setTrialDiscoverySidebarOpen] = useState(
     () => navInitRef.current!.trialDiscoverySidebarOpen
   );
   const [trialKeywordCanvasPatientId, setTrialKeywordCanvasPatientId] = useState<string | null>(null);
   const [trialKeywordAnalysis, setTrialKeywordAnalysis] = useState<FdaKeyword | null>(null);
+
+  // --- Hierarchical keyword tree (replaces 6-column WaveVisualization for single-patient) ---
+  const [keywordTree, setKeywordTree] = useState<TreeNode | null>(null);
+  const [selectedTreeNode, setSelectedTreeNode] = useState<TreeNode | null>(null);
+  const [keywordTreeError, setKeywordTreeError] = useState<string | null>(null);
+  const [keywordTreeHiddenLeafIds, setKeywordTreeHiddenLeafIds] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    if (!selectedPatient) {
+      setKeywordTree(null);
+      setSelectedTreeNode(null);
+      return;
+    }
+    let cancelled = false;
+    setKeywordTreeError(null);
+    fetchKeywordTree(selectedPatient.id, selectedPatient.name)
+      .then((tree) => {
+        if (!cancelled) setKeywordTree(tree);
+      })
+      .catch((err) => {
+        // Backend not yet seeded — fall back to the empty taxonomy scaffold so
+        // the demo still renders structure with no patient-specific leaves.
+        if (cancelled) return;
+        console.warn('[keyword-tree] falling back to demo/empty scaffold:', err);
+        setKeywordTree(buildKeywordTreeForPatient(selectedPatient.id, selectedPatient.name, []));
+        setKeywordTreeError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPatient]);
+
+  useEffect(() => {
+    setKeywordTreeHiddenLeafIds(new Set());
+  }, [selectedPatient?.id, keywordTree]);
+
+  const keywordTreeVisibleSnapshot = useMemo(() => {
+    if (!keywordTree) return null;
+    return keywordTreeHiddenLeafIds.size > 0
+      ? pruneHiddenFromTree(keywordTree, keywordTreeHiddenLeafIds)
+      : keywordTree;
+  }, [keywordTree, keywordTreeHiddenLeafIds]);
+
+  useEffect(() => {
+    setSelectedTreeNode((cur) => {
+      if (!cur || !keywordTreeVisibleSnapshot) return cur;
+      return findTreeNodeById(keywordTreeVisibleSnapshot, cur.id) ? cur : null;
+    });
+  }, [keywordTreeVisibleSnapshot]);
+
+  const toggleKeywordTreeNodeVisibility = useCallback(
+    (node: TreeNode) => {
+      if (!keywordTree || node.type === 'patient') return;
+      const target = findTreeNodeById(keywordTree, node.id);
+      if (!target) return;
+
+      setKeywordTreeHiddenLeafIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(target.id)) next.delete(target.id);
+        else next.add(target.id);
+        return next;
+      });
+    },
+    [keywordTree],
+  );
+
+  const resetKeywordTreeAllHidden = useCallback(() => {
+    setKeywordTreeHiddenLeafIds(new Set());
+  }, []);
 
   const trialKeywordCanvasPatient = useMemo(
     () =>
@@ -630,6 +727,12 @@ export default function CancerTreatmentDashboard({
     return selectedPatient ?? null;
   }, [trialDiscoverySidebarOpen, trialKeywordCanvasPatient, selectedPatient]);
 
+  const clinicalNumericPatientId = useMemo(() => {
+    const pid = timelinePatientForData?.id;
+    if (!pid) return null;
+    return resolveClinicalPatientId(pid);
+  }, [timelinePatientForData?.id]);
+
   const discoveryTimelineData = useMemo(() => {
     if (timelinePatientForData) {
       return getDiscoveryTimelineForPatient(timelinePatientForData);
@@ -645,6 +748,31 @@ export default function CancerTreatmentDashboard({
     setTrialDiscoverySidebarOpen(true);
   }, [selectedPatient]);
 
+  useEffect(() => {
+    const id = clinicalNumericPatientId;
+    if (activeView !== "timeline" || discoveryTab !== "timeline" || id == null) {
+      setClinicalTimelineData(null);
+      setClinicalTimelineLoading(false);
+      setClinicalTimelineError(null);
+      return;
+    }
+    const ac = new AbortController();
+    setClinicalTimelineLoading(true);
+    setClinicalTimelineError(null);
+    fetchClinicalPatientTimeline(id, ac.signal)
+      .then(setClinicalTimelineData)
+      .catch((err: unknown) => {
+        if ((err as { name?: string })?.name === "AbortError") return;
+        setClinicalTimelineData(null);
+        setClinicalTimelineError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => setClinicalTimelineLoading(false));
+    return () => ac.abort();
+  }, [activeView, discoveryTab, clinicalNumericPatientId]);
+
+  const showClinicalIntelSidebar =
+    activeView === "timeline" && discoveryTab === "timeline" && clinicalNumericPatientId != null;
+
   const trialQualifiedPatientsList = useMemo(
     () => patients.filter((p) => trialQualifiedPatientIds.includes(p.id)),
     [trialQualifiedPatientIds]
@@ -656,12 +784,13 @@ export default function CancerTreatmentDashboard({
   );
 
   const scopePickerRef = useRef<HTMLDivElement>(null);
-  const [messages, setMessages] = useState([
+  const [messages, setMessages] = useState<ClinicalAiPanelMessage[]>([
     {
       id: "1",
       role: "assistant",
-      content: "Hello! I'm your AI assistant for cancer treatment insights. I can help you understand timeline events, answer questions about treatments, and provide guidance. How can I assist you today?"
-    }
+      content:
+        "Hello! I'm your AI assistant for cancer treatment insights. Ask about this patient's longitudinal records; I'll use the Clinical Intelligence RAG backend when patient ids map (for example cohort id p-1 → API patient 1).",
+    },
   ]);
 
   const isClinicalEnabled = featureScope !== "research";
@@ -822,17 +951,9 @@ export default function CancerTreatmentDashboard({
     setDoctorFeedHighlightPostId(null);
   }, []);
 
-  const openDoctorFeedFromCanvas = useCallback((payload: { focusedDoctorId: number; focusedPostId: number }) => {
-    setFeedFocusedDoctorId(payload.focusedDoctorId);
-    setFeedFocusedPostId(payload.focusedPostId);
-    setIsDoctorFeedOpen(true);
-  }, []);
-
-  const bumpDoctorFeedRefresh = useCallback(() => setDoctorFeedRefreshTrigger((t) => t + 1), []);
-
-  const clearPendingDoctorFeedConnection = useCallback(() => {
-    setPendingDoctorFeedConnection(null);
-  }, []);
+  // (former WaveVisualization helpers removed — DoctorFeed integration is now triggered
+  // only from the legacy compare-mode flow; the new KeywordTree does not surface DoctorFeed
+  // connections from the canvas.)
 
   useEffect(() => {
     if (!pendingPostId) return;
@@ -1093,18 +1214,35 @@ export default function CancerTreatmentDashboard({
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {showKeywordsTree ? (
-          <WaveVisualization
-            doctorFeedBridgeRef={doctorFeedBridgeRef}
-            onDoctorFeedClose={closeDoctorFeed}
-            onDoctorFeedOpenFromCanvas={openDoctorFeedFromCanvas}
-            onDoctorFeedPostsChanged={bumpDoctorFeedRefresh}
-            pendingDoctorFeedConnection={pendingDoctorFeedConnection}
-            onConsumePendingDoctorFeedConnection={clearPendingDoctorFeedConnection}
-            comparePatients={compareSelectedPatients}
-            activeComparePatientId={activeComparePatientId}
-            onSetActiveComparePatient={setActiveComparePatientId}
-            clinicalTrialMode={compareIsClinicalTrialMode}
-          />
+          <div className="flex-1 min-h-0 flex">
+            <div className="flex-1 min-w-0 bg-slate-50 min-h-0">
+              {keywordTree ? (
+                <KeywordTree
+                  tree={keywordTree}
+                  onNodeClick={setSelectedTreeNode}
+                  selectedNodeId={selectedTreeNode?.id ?? null}
+                  hiddenLeafIds={keywordTreeHiddenLeafIds}
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center text-slate-400 text-sm">
+                  {keywordTreeError ? `Loading taxonomy (${keywordTreeError})…` : 'Loading keyword tree…'}
+                </div>
+              )}
+            </div>
+            {keywordTree ? (
+              <div className="w-[min(480px,40vw)] shrink-0 max-h-full min-h-0 flex flex-col">
+                <KeywordTreePubmedPanel
+                  patient={selectedPatient ?? null}
+                  keywordTreeFull={keywordTree}
+                  selectedNode={selectedTreeNode}
+                  hiddenSubtreeRootIds={keywordTreeHiddenLeafIds}
+                  onToggleNodeVisibility={toggleKeywordTreeNodeVisibility}
+                  onResetAllHidden={resetKeywordTreeAllHidden}
+                  onClose={() => setSelectedTreeNode(null)}
+                />
+              </div>
+            ) : null}
+          </div>
         ) : activeView === "dashboard" ? (
           <DashboardPage
             selectedPatient={selectedPatient}
@@ -1253,6 +1391,15 @@ export default function CancerTreatmentDashboard({
                       </button>
                     )}
                     <button
+                      type="button"
+                      onClick={() => setClinicalApiGuideOpen(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-full transition-colors"
+                      title="Clinical Intelligence API overview"
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      API guide
+                    </button>
+                    <button
                       onClick={() => {
                         setIsAIPanelOpen(true);
                         setTimeout(() => setIsAIPanelVisible(true), 10);
@@ -1271,7 +1418,7 @@ export default function CancerTreatmentDashboard({
             {discoveryTab === "keywords" && (
               <div
                 className={`flex-1 overflow-hidden flex min-h-0 ${
-                  trialDiscoverySidebarOpen
+                  trialDiscoverySidebarOpen && cohortPatientIds.length > 1
                     ? "flex-col lg:flex-row bg-gradient-to-br from-slate-50 to-violet-50/40"
                     : "flex-col"
                 }`}
@@ -1290,23 +1437,38 @@ export default function CancerTreatmentDashboard({
                       />
                     </>
                   ) : (
-                    <WaveVisualization
-                      doctorFeedBridgeRef={doctorFeedBridgeRef}
-                      onDoctorFeedClose={closeDoctorFeed}
-                      onDoctorFeedOpenFromCanvas={openDoctorFeedFromCanvas}
-                      onDoctorFeedPostsChanged={bumpDoctorFeedRefresh}
-                      onFocusedNodeChange={setKeywordsNodeFocused}
-                      pendingDoctorFeedConnection={pendingDoctorFeedConnection}
-                      onConsumePendingDoctorFeedConnection={clearPendingDoctorFeedConnection}
-                      comparePatients={compareSelectedPatients}
-                      activeComparePatientId={activeComparePatientId}
-                      onSetActiveComparePatient={setActiveComparePatientId}
-                      clinicalTrialMode={compareIsClinicalTrialMode}
-                      discoveryCohortSidebarOpen={trialDiscoverySidebarOpen}
-                    />
+                    <div className="flex-1 min-h-0 flex min-w-0">
+                      <div className="flex-1 min-w-0 bg-slate-50 min-h-0">
+                        {keywordTree ? (
+                          <KeywordTree
+                            tree={keywordTree}
+                            onNodeClick={setSelectedTreeNode}
+                            selectedNodeId={selectedTreeNode?.id ?? null}
+                            hiddenLeafIds={keywordTreeHiddenLeafIds}
+                          />
+                        ) : (
+                          <div className="h-full flex items-center justify-center text-slate-400 text-sm">
+                            {keywordTreeError ? `Loading taxonomy (${keywordTreeError})…` : 'Loading keyword tree…'}
+                          </div>
+                        )}
+                      </div>
+                      {keywordTree ? (
+                        <div className="w-[min(480px,40vw)] shrink-0 max-h-full min-h-0 flex flex-col">
+                          <KeywordTreePubmedPanel
+                            patient={selectedPatient ?? null}
+                            keywordTreeFull={keywordTree}
+                            selectedNode={selectedTreeNode}
+                            hiddenSubtreeRootIds={keywordTreeHiddenLeafIds}
+                            onToggleNodeVisibility={toggleKeywordTreeNodeVisibility}
+                            onResetAllHidden={resetKeywordTreeAllHidden}
+                            onClose={() => setSelectedTreeNode(null)}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
                   )}
                 </div>
-                {trialDiscoverySidebarOpen && (
+                {trialDiscoverySidebarOpen && cohortPatientIds.length > 1 && (
                   <div className="w-full lg:w-[min(420px,40vw)] shrink-0 flex flex-col min-h-0 max-h-[45vh] lg:max-h-none">
                     <QualifiedTrialPatientsSidebar
                       patients={
@@ -1332,6 +1494,13 @@ export default function CancerTreatmentDashboard({
                     : "flex-col"
                 }`}
               >
+              {showClinicalIntelSidebar && (
+                <ClinicalTimelineSidebar
+                  data={clinicalTimelineData}
+                  loading={clinicalTimelineLoading}
+                  error={clinicalTimelineError}
+                />
+              )}
               <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-white">
                 <div className="shrink-0 px-5 py-4 lg:px-8">
                   <div className="flex items-center justify-between gap-4">
@@ -1942,7 +2111,12 @@ export default function CancerTreatmentDashboard({
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <div className="flex items-center gap-3">
                 <Sparkles className="w-6 h-6 text-indigo-600" />
-                <h2 className="text-gray-900">Clinical AI</h2>
+                <div>
+                  <h2 className="text-gray-900">Clinical AI</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Powered by Clinical Intelligence RAG (5–15s typical).
+                  </p>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -1989,21 +2163,62 @@ export default function CancerTreatmentDashboard({
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
               {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                      message.role === "user"
-                        ? "bg-indigo-600 text-white"
-                        : "bg-gray-100 text-gray-900"
-                    }`}
-                  >
-                    <p className="text-sm leading-relaxed">{message.content}</p>
-                  </div>
+                <div key={message.id}>
+                  {message.role === "user" ? (
+                    <div className={`flex justify-end`}>
+                      <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-indigo-600 text-white">
+                        <p className="text-sm leading-relaxed">{message.content}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-3 items-start max-w-[85%]">
+                      <div
+                        className={`rounded-2xl px-4 py-3 text-sm leading-relaxed w-full ${
+                          message.assistantStatus === "blocked"
+                            ? "bg-amber-50 text-amber-950 border border-amber-200"
+                            : "bg-gray-100 text-gray-900"
+                        }`}
+                      >
+                        <p>{message.content}</p>
+                      </div>
+                      {message.references && message.references.length > 0 && (
+                        <div className="w-full space-y-2 pl-1">
+                          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Evidence</p>
+                          <ul className="space-y-2">
+                            {message.references.map((ref) => (
+                              <li
+                                key={`${message.id}-${ref.pmid}-${ref.title.slice(0, 24)}`}
+                                className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm text-xs text-gray-800"
+                              >
+                                <a
+                                  href={ref.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-medium text-indigo-600 hover:underline"
+                                >
+                                  {ref.title}
+                                </a>
+                                <p className="text-gray-500 mt-1">{ref.journal} · PMID {ref.pmid}</p>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
+              {clinicalChatPending && (
+                <div className="flex gap-3 rounded-xl border border-indigo-100 bg-indigo-50/90 px-4 py-3 text-sm text-gray-800">
+                  <div className="mt-1 w-8 h-8 shrink-0 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                  <div>
+                    <p className="font-medium text-indigo-900">Analyzing longitudinal data…</p>
+                    <p className="text-xs text-indigo-800/90 mt-0.5">
+                      RAG synthesis can take several seconds across the medical record corpus.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Input */}
@@ -2014,10 +2229,11 @@ export default function CancerTreatmentDashboard({
                     className="w-16 h-16 bg-gradient-to-br from-blue-500 to-orange-500 rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95"
                     onClick={() => {
                       // Voice recording logic would go here
-                      const aiResponse = {
+                      const aiResponse: ClinicalAiPanelMessage = {
                         id: String(messages.length + 1),
                         role: "assistant",
-                        content: "Voice mode is active. In a production environment, this would record your voice, transcribe it, and provide a spoken response."
+                        content:
+                          "Voice mode is active. In a production environment, this would record your voice, transcribe it, and provide a spoken response.",
                       };
                       setMessages([...messages, aiResponse]);
                     }}
@@ -2028,23 +2244,62 @@ export default function CancerTreatmentDashboard({
                 </div>
               ) : (
                 <form
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
-                    if (chatInput.trim()) {
-                      const userMessage = {
-                        id: String(messages.length + 1),
-                        role: "user",
-                        content: chatInput
-                      };
-                      
-                      const aiResponse = {
-                        id: String(messages.length + 2),
-                        role: "assistant",
-                        content: "I understand your question. This is a demo AI assistant. In a production environment, this would connect to a real AI service to provide insights about the patient's treatment timeline, medications, and care plan."
-                      };
-                      
-                      setMessages([...messages, userMessage, aiResponse]);
-                      setChatInput("");
+                    const trimmed = chatInput.trim();
+                    if (!trimmed || clinicalChatPending) return;
+
+                    const userMessage: ClinicalAiPanelMessage = {
+                      id: `u-${Date.now()}`,
+                      role: "user",
+                      content: trimmed,
+                    };
+                    setChatInput("");
+                    setMessages((prev) => [...prev, userMessage]);
+
+                    const cid = timelinePatientForData?.id
+                      ? resolveClinicalPatientId(timelinePatientForData.id)
+                      : null;
+
+                    if (cid === null) {
+                      setMessages((prev) => [
+                        ...prev,
+                        {
+                          id: `a-${Date.now()}`,
+                          role: "assistant",
+                          content:
+                            "This patient id cannot be mapped to the Clinical Intelligence backend. Demo cohort ids use the pattern p-N (for example p-1 calls /patient/1/timeline and /chat with patient_id 1).",
+                        },
+                      ]);
+                      return;
+                    }
+
+                    setClinicalChatPending(true);
+                    try {
+                      const res = await postClinicalChat({ patient_id: cid, user_query: trimmed });
+                      const blocked = res.status === "blocked";
+                      setMessages((prev) => [
+                        ...prev,
+                        {
+                          id: `a-${Date.now()}`,
+                          role: "assistant",
+                          content: res.ai_analysis,
+                          references: res.references,
+                          assistantStatus: blocked ? "blocked" : "success",
+                        },
+                      ]);
+                    } catch (err) {
+                      setMessages((prev) => [
+                        ...prev,
+                        {
+                          id: `a-${Date.now()}`,
+                          role: "assistant",
+                          content:
+                            err instanceof Error ? err.message : "Unable to reach the Clinical Intelligence API.",
+                        },
+                      ]);
+                    } finally {
+                      setClinicalChatPending(false);
                     }
                   }}
                   className="flex items-center gap-2"
@@ -2053,12 +2308,14 @@ export default function CancerTreatmentDashboard({
                     type="text"
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
-                    placeholder="Ask me anything..."
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="Ask about longitudinal records (RAG-backed)…"
+                    disabled={clinicalChatPending}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
                   />
                   <button
                     type="submit"
-                    className="w-10 h-10 bg-indigo-600 hover:bg-indigo-700 rounded-full flex items-center justify-center transition-colors"
+                    disabled={clinicalChatPending || !chatInput.trim()}
+                    className="w-10 h-10 bg-indigo-600 hover:bg-indigo-700 rounded-full flex items-center justify-center transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                   >
                     <Send className="w-5 h-5 text-white" />
                   </button>
@@ -2071,6 +2328,8 @@ export default function CancerTreatmentDashboard({
 
       {/* News Feed Side Panel */}
       <NewsFeedPanel isOpen={isNewsFeedOpen} onClose={() => setIsNewsFeedOpen(false)} />
+
+      <ClinicalIntelligenceApiGuideDialog open={clinicalApiGuideOpen} onOpenChange={setClinicalApiGuideOpen} />
 
       {/* Profile Panel */}
       <ProfilePanel isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />

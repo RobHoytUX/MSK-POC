@@ -32,28 +32,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!supabaseConfigured) {
+      setUser({ id: 'demo', email: 'demo@demo.com' } as any);
       setLoading(false);
       return;
     }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
-      setLoading(false);
-    });
+    let subscription: { unsubscribe: () => void } | null = null;
+    try {
+      const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          void fetchProfile(session.user.id);
+        } else {
+          setProfile(null);
+        }
+      });
+      subscription = data.subscription;
+    } catch (e) {
+      console.error('[supabase-auth] onAuthStateChange failed', e);
+    }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setProfile(null);
-      }
-    });
+    void supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (error) throw error;
+        const session = data.session ?? null;
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.user) void fetchProfile(session.user.id);
+      })
+      .catch((e: unknown) => {
+        console.error('[supabase-auth] getSession failed', e);
+        setSession(null);
+        setUser(null);
+      })
+      .finally(() => setLoading(false));
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
 
   const getInitials = (name: string) => {

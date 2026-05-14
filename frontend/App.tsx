@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { AuthProvider, useAuth } from "./lib/AuthContext";
 import CancerTreatmentDashboard from "./components/CancerTreatmentDashboard";
 import AuthPage from "./components/AuthPage";
@@ -54,13 +54,42 @@ function AppContent() {
   }, [cohortPatientIds]);
 
   if (loading || !hydrated) {
+    const shell: CSSProperties = {
+      position: 'fixed',
+      inset: 0,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'column',
+      gap: '1rem',
+      background: '#f8fafc',
+      fontFamily: 'system-ui, sans-serif',
+    };
+    const text: CSSProperties = {
+      margin: 0,
+      fontSize: '0.875rem',
+      color: '#64748b',
+    };
+    const spin: CSSProperties = {
+      width: '3rem',
+      height: '3rem',
+      border: '4px solid #e0e7ff',
+      borderTopColor: '#4f46e5',
+      borderRadius: '9999px',
+      animation: 'msk-app-spin 0.85s linear infinite',
+    };
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-          <p className="text-gray-500 text-sm">Loading...</p>
+      <>
+        <style>{`
+          @keyframes msk-app-spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+        <div style={shell} role="status" aria-busy="true" aria-live="polite">
+          <div style={spin} aria-hidden />
+          <p style={text}>Loading…</p>
         </div>
-      </div>
+      </>
     );
   }
 
