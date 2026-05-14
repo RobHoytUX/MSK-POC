@@ -33,40 +33,45 @@ export default function ClinicalIntelligenceApiGuideDialog({
         <DialogHeader>
           <div className="flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-indigo-600" />
-            <DialogTitle className="text-left">Clinical Intelligence API</DialogTitle>
+            <DialogTitle className="text-left text-base leading-snug">
+              Clinical Intelligence API: Frontend Integration Guide
+            </DialogTitle>
           </div>
           <DialogDescription className="text-left text-sm text-gray-600">
-            Frontend integration overview. This dashboard calls the live endpoints when a patient id maps to a backend
-            id (for example cohort id <code className="text-xs bg-slate-100 px-1 rounded">p-1</code> → patient{" "}
-            <code className="text-xs bg-slate-100 px-1 rounded">1</code>). Override base URL with{" "}
-            <code className="text-xs bg-slate-100 px-1 rounded">VITE_CLINICAL_INTELLIGENCE_URL</code>.
+            This is the same integration reference used for the Longitudinal + RAG stack. Open it anytime via{" "}
+            <strong className="font-medium text-gray-800">API guide</strong> in the Discovery header (next to Ask AI).
+            This dashboard maps cohort ids (e.g. <code className="text-xs bg-slate-100 px-1 rounded">p-1</code> →
+            backend patient <code className="text-xs bg-slate-100 px-1 rounded">1</code>). Override the base URL with{" "}
+            <code className="text-xs bg-slate-100 px-1 rounded">VITE_CLINICAL_INTELLIGENCE_URL</code> (e.g. on Vercel).
           </DialogDescription>
         </DialogHeader>
         <div className="overflow-y-auto flex-1 pr-1 space-y-6 text-sm text-gray-800">
           <section>
             <h3 className="font-semibold text-gray-900">1. Overview</h3>
             <p className="mt-2 text-gray-600 leading-relaxed">
-              Structured longitudinal patient records from decades of unstructured documents, SQLite for local context,
-              and OpenSearch-backed RAG for research synthesis.
+              This backend transforms 20+ years of unstructured patient records (PDFs) into a structured, queryable
+              Longitudinal Patient Record. It uses a persistent SQLite store for local context and an OpenSearch-backed RAG
+              engine for global medical research synthesis (including searches across tens of millions of indexed records).
             </p>
             <ul className="mt-3 list-disc pl-5 text-gray-600 space-y-1">
               <li>
-                Current base URL in this bundle:{" "}
+                Base URL (this build):{" "}
                 <a className="text-indigo-600 underline break-all" href={baseUrl} target="_blank" rel="noopener noreferrer">
                   {baseUrl}
                 </a>
               </li>
               <li>Protocol: REST (JSON)</li>
-              <li>CORS enabled for localhost and Hugging Face frontends.</li>
+              <li>CORS enabled (typical demo hosts include localhost and Hugging Face; your deploy may add Vercel origins on the server).</li>
             </ul>
           </section>
 
           <section>
             <h3 className="font-semibold text-gray-900">2. Core endpoints</h3>
 
-            <h4 className="mt-4 text-[13px] font-medium text-gray-800">A. Patient timeline — GET</h4>
+            <h4 className="mt-4 text-[13px] font-medium text-gray-800">A. Get patient timeline — GET</h4>
             <p className="text-gray-600 mt-1">
-              Vertical sidebar; encounters newest → oldest at <code className="bg-slate-100 px-1 rounded">GET /patient/1/timeline</code>.
+              Use this to build the vertical timeline in the left sidebar. Every medical encounter, newest → oldest. Example:{" "}
+              <code className="bg-slate-100 px-1 rounded">GET {baseUrl}/patient/1/timeline</code>
             </p>
             <Code>{`{
   "patient_name": "Laura Lehmann",
@@ -76,27 +81,31 @@ export default function ClinicalIntelligenceApiGuideDialog({
       "filename": "10-15-2024.pdf",
       "doc_date": "2024-10-15",
       "snippet": "Follow up visit for ALCL management. Patient feels well..."
+    },
+    {
+      "filename": "01-10-2017.pdf",
+      "doc_date": "2017-01-10",
+      "snippet": "Lab results for Inhibin B and AMH levels..."
     }
   ]
 }`}</Code>
 
-            <h4 className="mt-6 text-[13px] font-medium text-gray-800">B. RAG chat — POST</h4>
+            <h4 className="mt-6 text-[13px] font-medium text-gray-800">B. Integrated RAG chat — POST</h4>
             <p className="text-gray-600 mt-1">
-              Integrated RAG at{" "}
-              <code className="bg-slate-100 px-1 rounded">POST ${baseUrl || "..."}/chat</code> — injects longitudinal
-              context automatically.
+              The “Intelligence” engine: question in, longitudinal context + PubMed-backed synthesis out. Endpoint:{" "}
+              <code className="bg-slate-100 px-1 rounded">POST {baseUrl || "…"}/chat</code>
             </p>
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mt-2">Request body</p>
             <Code>{`{
   "patient_id": 1,
   "user_query": "Explain the connection between her 2005 BEAM protocol and her 2017 hormone levels."
 }`}</Code>
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mt-2">Response shape</p>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mt-2">Response format</p>
             <Code>{`{
-  "ai_analysis": "Based on the records...",
+  "ai_analysis": "Based on the records, the patient underwent BEAM conditioning in 2005 [1]. This protocol is significantly gonadotoxic, which explains the undetectable AMH levels recorded in 2017 [2]...",
   "references": [
     {
-      "title": "...",
+      "title": "Late effects of BEAM conditioning on ovarian reserve",
       "pmid": "123456",
       "journal": "Journal of Clinical Oncology",
       "link": "https://pubmed.ncbi.nlm.nih.gov/123456/"
@@ -107,25 +116,31 @@ export default function ClinicalIntelligenceApiGuideDialog({
           </section>
 
           <section>
-            <h3 className="font-semibold text-gray-900">3. Safety guardrails</h3>
+            <h3 className="font-semibold text-gray-900">3. Safety guardrails (important)</h3>
             <p className="mt-2 text-gray-600">
-              Blocked keywords in <code className="bg-slate-100 px-1 rounded">user_query</code> (such as leukemia, terminal,
-              death): API returns refusal copy and{" "}
-              <code className="bg-slate-100 px-1 rounded">&quot;status&quot;: &quot;blocked&quot;</code>. UI shows amber styling.
+              Deterministic safety layer: blocked keywords in <code className="bg-slate-100 px-1 rounded">user_query</code>{" "}
+              include <strong className="font-medium text-gray-800">leukemia</strong>,{" "}
+              <strong className="font-medium text-gray-800">terminal</strong>, <strong className="font-medium text-gray-800">death</strong>. The API then returns{" "}
+              <code className="bg-slate-100 px-1 rounded">ai_analysis: &quot;AI will not give you response like that.&quot;</code>{" "}
+              and <code className="bg-slate-100 px-1 rounded">&quot;status&quot;: &quot;blocked&quot;</code>. Recommended: show that
+              state in a distinct color (e.g. orange).
             </p>
           </section>
 
           <section>
-            <h3 className="font-semibold text-gray-900">4. UI patterns</h3>
+            <h3 className="font-semibold text-gray-900">4. Integration tips for the “wow” factor</h3>
             <ul className="mt-2 list-disc pl-5 text-gray-600 space-y-1">
               <li>Sidebar: group by year from doc_date (“2024 (2 records)”).</li>
               <li>Evidence cards: map references to linked PubMed tiles under the synthesis.</li>
-              <li>Loading: RAG runs 5–15s — show “Analyzing longitudinal data…” under the spinner.</li>
+              <li>
+                Loading: synthesis can take 5–15 seconds (high-density search). Use a clear “Analyzing longitudinal data…”
+                state on the spinner.
+              </li>
             </ul>
           </section>
 
           <section>
-            <h3 className="font-semibold text-gray-900">5. Quick test (fetch)</h3>
+            <h3 className="font-semibold text-gray-900">5. Quick test (JavaScript / fetch)</h3>
             <Code>{`const askClinicalAI = async (query) => {
   const response = await fetch('${baseUrl}/chat', {
     method: 'POST',
