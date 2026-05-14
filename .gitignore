@@ -16,6 +16,9 @@ dist
 dist-ssr
 *.local
 
+# Vite optimize cache (dev prebundles — do not commit)
+frontend/.vite/
+
 # Environment files
 .env
 .env.local
