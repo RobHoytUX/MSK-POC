@@ -13,12 +13,15 @@ import PatientChartPage from "./PatientChartPage";
 import NewsFeedPanel from "./NewsFeedPanel";
 import {
   QuantumPanel,
-  WaveVisualization,
   DoctorFeed,
   ArticleReader,
   type DoctorFeedCanvasBridge,
   type PendingDoctorFeedConnection,
 } from './keywords-wave';
+import KeywordTree from './KeywordTree';
+import KeywordTreePubmedPanel from './KeywordTreePubmedPanel';
+import { buildPatientTree, type TreeNode } from '../lib/treeTaxonomy';
+import { fetchKeywordTree } from '../lib/api';
 import ComparePatientPanel from './ComparePatientPanel';
 import PatientComparisonView from './PatientComparisonView';
 import TrialQualificationPanel from './TrialQualificationPanel';
@@ -543,8 +546,9 @@ export default function CancerTreatmentDashboard({
   const [qualificationPanelPatient, setQualificationPanelPatient] = useState<import('../lib/patients').Patient | undefined>(undefined);
   const [isCriteriaMatchingOpen, setIsCriteriaMatchingOpen] = useState(false);
   const [compareSelectedIds, setCompareSelectedIds] = useState<Set<string>>(new Set());
-  const [activeComparePatientId, setActiveComparePatientId] = useState<string | null>(null);
-  const [compareIsClinicalTrialMode, setCompareIsClinicalTrialMode] = useState(false);
+  const [, _setActiveComparePatientId] = useState<string | null>(null);
+  void _setActiveComparePatientId;
+  const [, setCompareIsClinicalTrialMode] = useState(false);
   const compareSelectedPatients = useMemo(
     () => patients.filter((p) => compareSelectedIds.has(p.id)),
     [compareSelectedIds]
@@ -570,7 +574,7 @@ export default function CancerTreatmentDashboard({
   const [articleReaderOpen, setArticleReaderOpen] = useState(false);
   const [readerArticle, setReaderArticle] = useState<{ title: string; description?: string; author?: string } | null>(null);
   const pendingDoctorFeedApplyRef = useRef(0);
-  const [pendingDoctorFeedConnection, setPendingDoctorFeedConnection] = useState<PendingDoctorFeedConnection | null>(null);
+  const [, setPendingDoctorFeedConnection] = useState<PendingDoctorFeedConnection | null>(null);
   const [activeTimeRange, setActiveTimeRange] = useState<"1m" | "3m" | "6m" | "1y" | "custom">("1y");
   const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
@@ -601,12 +605,41 @@ export default function CancerTreatmentDashboard({
   const [isScopePickerOpen, setIsScopePickerOpen] = useState(false);
   const [showKeywordsTree, setShowKeywordsTree] = useState(false);
   const [discoveryTab, setDiscoveryTab] = useState<"timeline" | "keywords">(() => navInitRef.current!.discoveryTab);
-  const [, setKeywordsNodeFocused] = useState(false);
   const [trialDiscoverySidebarOpen, setTrialDiscoverySidebarOpen] = useState(
     () => navInitRef.current!.trialDiscoverySidebarOpen
   );
   const [trialKeywordCanvasPatientId, setTrialKeywordCanvasPatientId] = useState<string | null>(null);
   const [trialKeywordAnalysis, setTrialKeywordAnalysis] = useState<FdaKeyword | null>(null);
+
+  // --- Hierarchical keyword tree (replaces 6-column WaveVisualization for single-patient) ---
+  const [keywordTree, setKeywordTree] = useState<TreeNode | null>(null);
+  const [selectedTreeNode, setSelectedTreeNode] = useState<TreeNode | null>(null);
+  const [keywordTreeError, setKeywordTreeError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedPatient) {
+      setKeywordTree(null);
+      setSelectedTreeNode(null);
+      return;
+    }
+    let cancelled = false;
+    setKeywordTreeError(null);
+    fetchKeywordTree(selectedPatient.id, selectedPatient.name)
+      .then((tree) => {
+        if (!cancelled) setKeywordTree(tree);
+      })
+      .catch((err) => {
+        // Backend not yet seeded — fall back to the empty taxonomy scaffold so
+        // the demo still renders structure with no patient-specific leaves.
+        if (cancelled) return;
+        console.warn('[keyword-tree] falling back to empty scaffold:', err);
+        setKeywordTree(buildPatientTree([], selectedPatient.name));
+        setKeywordTreeError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPatient]);
 
   const trialKeywordCanvasPatient = useMemo(
     () =>
@@ -822,17 +855,9 @@ export default function CancerTreatmentDashboard({
     setDoctorFeedHighlightPostId(null);
   }, []);
 
-  const openDoctorFeedFromCanvas = useCallback((payload: { focusedDoctorId: number; focusedPostId: number }) => {
-    setFeedFocusedDoctorId(payload.focusedDoctorId);
-    setFeedFocusedPostId(payload.focusedPostId);
-    setIsDoctorFeedOpen(true);
-  }, []);
-
-  const bumpDoctorFeedRefresh = useCallback(() => setDoctorFeedRefreshTrigger((t) => t + 1), []);
-
-  const clearPendingDoctorFeedConnection = useCallback(() => {
-    setPendingDoctorFeedConnection(null);
-  }, []);
+  // (former WaveVisualization helpers removed — DoctorFeed integration is now triggered
+  // only from the legacy compare-mode flow; the new KeywordTree does not surface DoctorFeed
+  // connections from the canvas.)
 
   useEffect(() => {
     if (!pendingPostId) return;
@@ -1093,19 +1118,30 @@ export default function CancerTreatmentDashboard({
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {showKeywordsTree ? (
-          <WaveVisualization
-            doctorFeedBridgeRef={doctorFeedBridgeRef}
-            onDoctorFeedClose={closeDoctorFeed}
-            onDoctorFeedOpenFromCanvas={openDoctorFeedFromCanvas}
-            onDoctorFeedPostsChanged={bumpDoctorFeedRefresh}
-            pendingDoctorFeedConnection={pendingDoctorFeedConnection}
-            onConsumePendingDoctorFeedConnection={clearPendingDoctorFeedConnection}
-            comparePatients={compareSelectedPatients}
-            activeComparePatientId={activeComparePatientId}
-            onSetActiveComparePatient={setActiveComparePatientId}
-            clinicalTrialMode={compareIsClinicalTrialMode}
-            patientId={selectedPatient?.id ?? cohortPatientIds[0]}
-          />
+          <div className="flex-1 min-h-0 flex">
+            <div className="flex-1 min-w-0 bg-slate-50">
+              {keywordTree ? (
+                <KeywordTree
+                  tree={keywordTree}
+                  onNodeClick={setSelectedTreeNode}
+                  selectedNodeId={selectedTreeNode?.id ?? null}
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center text-slate-400 text-sm">
+                  {keywordTreeError ? `Loading taxonomy (${keywordTreeError})…` : 'Loading keyword tree…'}
+                </div>
+              )}
+            </div>
+            {selectedTreeNode && (
+              <div className="w-[min(480px,40vw)] shrink-0 max-h-full">
+                <KeywordTreePubmedPanel
+                  patient={selectedPatient ?? null}
+                  selectedNode={selectedTreeNode}
+                  onClose={() => setSelectedTreeNode(null)}
+                />
+              </div>
+            )}
+          </div>
         ) : activeView === "dashboard" ? (
           <DashboardPage
             selectedPatient={selectedPatient}
@@ -1291,21 +1327,30 @@ export default function CancerTreatmentDashboard({
                       />
                     </>
                   ) : (
-                    <WaveVisualization
-                      doctorFeedBridgeRef={doctorFeedBridgeRef}
-                      onDoctorFeedClose={closeDoctorFeed}
-                      onDoctorFeedOpenFromCanvas={openDoctorFeedFromCanvas}
-                      onDoctorFeedPostsChanged={bumpDoctorFeedRefresh}
-                      onFocusedNodeChange={setKeywordsNodeFocused}
-                      pendingDoctorFeedConnection={pendingDoctorFeedConnection}
-                      onConsumePendingDoctorFeedConnection={clearPendingDoctorFeedConnection}
-                      comparePatients={compareSelectedPatients}
-                      activeComparePatientId={activeComparePatientId}
-                      onSetActiveComparePatient={setActiveComparePatientId}
-                      clinicalTrialMode={compareIsClinicalTrialMode}
-                      discoveryCohortSidebarOpen={trialDiscoverySidebarOpen}
-                      patientId={selectedPatient?.id ?? cohortPatientIds[0]}
-                    />
+                    <div className="flex-1 min-h-0 flex">
+                      <div className="flex-1 min-w-0 bg-slate-50">
+                        {keywordTree ? (
+                          <KeywordTree
+                            tree={keywordTree}
+                            onNodeClick={setSelectedTreeNode}
+                            selectedNodeId={selectedTreeNode?.id ?? null}
+                          />
+                        ) : (
+                          <div className="h-full flex items-center justify-center text-slate-400 text-sm">
+                            {keywordTreeError ? `Loading taxonomy (${keywordTreeError})…` : 'Loading keyword tree…'}
+                          </div>
+                        )}
+                      </div>
+                      {selectedTreeNode && (
+                        <div className="w-[min(480px,40vw)] shrink-0 max-h-full">
+                          <KeywordTreePubmedPanel
+                            patient={selectedPatient ?? null}
+                            selectedNode={selectedTreeNode}
+                            onClose={() => setSelectedTreeNode(null)}
+                          />
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
                 {trialDiscoverySidebarOpen && (

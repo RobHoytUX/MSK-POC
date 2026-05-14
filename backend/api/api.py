@@ -31,6 +31,16 @@ class KeywordColumn(BaseModel):
     count: int
     nodes: list[KeywordNode]
 
+class KeywordTreeNode(BaseModel):
+    id: str
+    label: str
+    taxonomy_path: str
+    pubmed_available: bool = True
+
+class KeywordTreeResponse(BaseModel):
+    patient_id: str
+    nodes: list[KeywordTreeNode]
+
 class PubMedPaper(BaseModel):
     pmid: str
     title: str
@@ -120,26 +130,28 @@ def _rows_as_dicts(cursor: Any) -> list[dict[str, Any]]:
     return [dict(zip(cols, row)) for row in cursor.fetchall()]
 
 
-# --- keyword graph ---
+# --- keyword tree ---
+#
+# The patient root and the static taxonomy scaffold (Medical History,
+# Diagnosis, and their categories/subcategories) live on the frontend in
+# `lib/treeTaxonomy.ts`. This endpoint only returns the patient-specific
+# leaves with their attachment paths; the client merges them into the
+# scaffold for rendering.
 
-@app.get("/api/patients/{patient_id}/keyword-graph", response_model=list[KeywordColumn], operation_id="getKeywordGraph")
-def keyword_graph(patient_id: str):
+@app.get(
+    "/api/patients/{patient_id}/keyword-tree",
+    response_model=KeywordTreeResponse,
+    operation_id="getKeywordTree",
+)
+def keyword_tree(patient_id: str):
     conn = get_db()
     cur = conn.cursor()
     cur.execute(
         """
-        SELECT
-          n.id,
-          n.label,
-          n.column_name,
-          COALESCE(
-            array_agg(e.to_id) FILTER (WHERE e.to_id IS NOT NULL), '{}'
-          ) AS connections
-        FROM keyword_nodes n
-        LEFT JOIN keyword_edges e
-          ON e.patient_id = n.patient_id AND e.from_id = n.id
-        WHERE n.patient_id = %s
-        GROUP BY n.id, n.label, n.column_name
+        SELECT id, label, taxonomy_path
+        FROM keyword_nodes
+        WHERE patient_id = %s
+        ORDER BY taxonomy_path, id
         """,
         (patient_id,),
     )
@@ -147,26 +159,40 @@ def keyword_graph(patient_id: str):
     cur.close()
 
     if not rows:
-        raise HTTPException(status_code=404, detail="graph not ready")
+        raise HTTPException(status_code=404, detail="tree not ready")
 
-    column_order = [
-        "Patient Data", "Categories", "Specifics",
-        "Treatments", "Biomarkers", "Monitoring",
-    ]
-    buckets: dict[str, list[dict[str, Any]]] = {c: [] for c in column_order}
-    for row in rows:
-        col = row["column_name"]
-        if col in buckets:
-            buckets[col].append({
-                "id": row["id"],
-                "label": row["label"],
-                "connections": list(row["connections"]) if row["connections"] else [],
-            })
+    # Check which leaves have cached PubMed results so the UI can hint affordance.
+    node_ids = [r["id"] for r in rows]
+    available: set[str] = set()
+    if node_ids:
+        try:
+            table = dynamo()
+            # DynamoDB batch_get caps at 100 keys; chunk if needed.
+            for i in range(0, len(node_ids), 100):
+                chunk = node_ids[i : i + 100]
+                resp = table.meta.client.batch_get_item(
+                    RequestItems={table.name: {"Keys": [{"node_id": nid} for nid in chunk]}}
+                )
+                for item in resp.get("Responses", {}).get(table.name, []):
+                    available.add(item["node_id"])
+        except Exception as e:
+            # If DynamoDB is unreachable, default to "available" so clicks at
+            # least attempt a fetch — the per-node endpoint will 404 cleanly.
+            print(f"[keyword-tree] pubmed availability check skipped: {e}")
+            available = set(node_ids)
 
-    return [
-        {"title": col, "count": len(nodes), "nodes": nodes}
-        for col, nodes in buckets.items()
-    ]
+    return {
+        "patient_id": patient_id,
+        "nodes": [
+            {
+                "id": r["id"],
+                "label": r["label"],
+                "taxonomy_path": r["taxonomy_path"],
+                "pubmed_available": r["id"] in available,
+            }
+            for r in rows
+        ],
+    }
 
 
 # --- PubMed cache ---

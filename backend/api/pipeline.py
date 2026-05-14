@@ -36,19 +36,56 @@ OS_USER = os.environ.get("OPENSEARCH_USER", "dbadmin")
 OS_PASS = os.environ.get("OPENSEARCH_PASS", "Prudvi@1999")
 OS_INDEX = "pubmed_39m_v1"
 
-VALID_COLUMNS = {
-    "Patient Data", "Categories", "Specifics",
-    "Treatments", "Biomarkers", "Monitoring",
-}
+# --- Canonical taxonomy ---
+#
+# Each entry is a dot-delimited "taxonomy_path" identifying a scaffold
+# subcategory under which patient-specific extracted keywords may hang.
+# The full hierarchy (Patient → Medical History/Diagnosis → category →
+# subcategory) lives in the frontend (frontend/lib/treeTaxonomy.ts).
+# Here we only need the leaf-attachment points so Bedrock can pick the right
+# bucket for each extracted keyword.
 
-COLUMN_PREFIXES = {
-    "Patient Data": "pd",
-    "Categories": "cat",
-    "Specifics": "spec",
-    "Treatments": "treat",
-    "Biomarkers": "bio",
-    "Monitoring": "mon",
-}
+TAXONOMY_PATHS: list[str] = [
+    # Medical History
+    "medical-history.comorbidities.cardiovascular",
+    "medical-history.comorbidities.endocrine",
+    "medical-history.comorbidities.renal-hepatic",
+    "medical-history.prior-malignancies.secondary",
+    "medical-history.prior-malignancies.prior-treatments",
+    "medical-history.family-history.pedigree",
+    "medical-history.family-history.syndromes",
+    "medical-history.surgical.major",
+    "medical-history.surgical.access",
+    "medical-history.social.tobacco",
+    "medical-history.social.occupational",
+    # Diagnosis
+    "diagnosis.primary-tumor.anatomy",
+    "diagnosis.primary-tumor.histology",
+    "diagnosis.primary-tumor.grade",
+    "diagnosis.staging.t",
+    "diagnosis.staging.n",
+    "diagnosis.staging.m",
+    "diagnosis.staging.group",
+    "diagnosis.biomarkers.ihc",
+    "diagnosis.biomarkers.serology",
+    "diagnosis.biomarkers.ngs",
+    "diagnosis.biomarkers.instability",
+    "diagnosis.metastatic.sites",
+    "diagnosis.metastatic.volume",
+    "diagnosis.general.conditions",
+]
+
+VALID_PATHS = set(TAXONOMY_PATHS)
+
+
+def _prefix_for_path(path: str) -> str:
+    """Compact ID prefix derived from the taxonomy path (e.g. dx-bio for diagnosis.biomarkers.*)."""
+    parts = path.split(".")
+    if not parts:
+        return "node"
+    head = "mh" if parts[0] == "medical-history" else "dx" if parts[0] == "diagnosis" else parts[0][:3]
+    tail = parts[1][:3] if len(parts) > 1 else ""
+    return f"{head}-{tail}" if tail else head
 
 # --- AWS clients ---
 
@@ -146,89 +183,166 @@ def bedrock_call(prompt: str, max_retries: int = 4) -> str:
     raise last_err
 
 
-def extract_nodes(ehr: dict[str, Any]) -> list[dict[str, Any]]:
-    ehr_text = ehr["sections"].get("full_text", json.dumps(ehr["sections"]))[:120000]
-    prompt = f"""Given this patient chart:
+ANNOTATED_PATHS = """  medical-history.comorbidities.cardiovascular    # CHF, CAD, arrhythmias, hypertension, cardiotoxicity risk, homocysteine
+  medical-history.comorbidities.endocrine          # diabetes, thyroid dysfunction, adrenal/hormonal conditions
+  medical-history.comorbidities.renal-hepatic      # CKD, cirrhosis, hepatitis — affects drug clearance & dosing
+  medical-history.prior-malignancies.secondary     # prior unrelated cancer diagnoses
+  medical-history.prior-malignancies.prior-treatments  # cumulative radiation doses, chemo limits (e.g. Doxorubicin lifetime dose)
+  medical-history.family-history.pedigree          # first/second-degree relatives with cancer, age of onset
+  medical-history.family-history.syndromes         # confirmed Lynch syndrome, Li-Fraumeni, BRCA1/2 germline status
+  medical-history.surgical.major                   # organ resections — gastrectomy, nephrectomy, colectomy
+  medical-history.surgical.access                  # Port-a-cath, PICC line, central line placements
+  medical-history.social.tobacco                   # pack-year history, current/former smoker, vaping
+  medical-history.social.occupational              # asbestos, benzene, heavy metal, radiation exposure
+  diagnosis.primary-tumor.anatomy                  # organ and sub-site (e.g. upper outer quadrant left breast, right lower lobe)
+  diagnosis.primary-tumor.histology                # cell type and morphology (e.g. invasive ductal, adenocarcinoma, NSCLC)
+  diagnosis.primary-tumor.grade                    # cellular differentiation grade 1–4 / well-to-undifferentiated
+  diagnosis.staging.t                              # T stage — tumor size and local extent
+  diagnosis.staging.n                              # N stage — regional lymph node involvement
+  diagnosis.staging.m                              # M stage — presence of distant metastasis
+  diagnosis.staging.group                          # final summary stage (e.g. Stage IIIA, Stage IV)
+  diagnosis.biomarkers.ihc                         # tissue staining results ONLY: ER/PR status, HER2, PD-L1 %, Ki-67 (IHC assays on biopsy/tissue)
+  diagnosis.biomarkers.serology                    # serum/blood immunology: ANA, ANCA, paraneoplastic antibodies, immunoglobulin levels, complement, celiac panel
+  diagnosis.biomarkers.ngs                         # genomic variants from sequencing: EGFR, ALK, KRAS, BRCA somatic mutations, translocations
+  diagnosis.biomarkers.instability                 # MSI (microsatellite instability), TMB, mismatch repair status
+  diagnosis.metastatic.sites                       # specific metastatic sites — visceral (liver, lung) vs non-visceral (bone, lymph node)
+  diagnosis.metastatic.volume                      # disease extent: oligometastatic (≤3 sites) vs polymetastatic
+  diagnosis.general.conditions                     # non-oncology active diagnoses: elevated LDL/cholesterol, GERD, obesity, osteoporosis, vitamin deficiencies, normal lab values worth noting"""
 
-{ehr_text}
+EXTRACTION_PROMPT_TEMPLATE = """You extract clinically meaningful keywords from a patient chart excerpt and \
+place each one under the single most specific path in this fixed taxonomy.
 
-Extract all clinically meaningful keywords and assign each to exactly one of these 6 categories:
-- Patient Data: top-level chart sections (e.g. Medical History, Lab Results, Treatment History)
-- Categories: clinical groupings (e.g. Cancer Diagnosis, Genetic Markers, Prior Chemotherapy)
-- Specifics: concrete named values (e.g. Stage II, BRCA Negative, AC-T Chemotherapy)
-- Treatments: treatment modalities (e.g. Chemotherapy, Surgery, Radiation, Hormone Therapy)
-- Biomarkers: lab values and genomic markers (e.g. ER+/PR+ HER2-, Ki-67 Index, Oncotype Score)
-- Monitoring: ongoing tests and follow-up items (e.g. Lab Monitoring, Imaging Studies, Clinical Trials)
+Taxonomy paths with guidance (pick exactly one per keyword):
+{annotated_paths}
+
+Already extracted from earlier sections (DO NOT repeat these):
+{seen}
+
+Patient chart excerpt:
+---
+{chunk}
+---
+
+Rules:
+- Only return findings NEW in this excerpt — skip anything in the "already extracted" list.
+- Each keyword must use one of the paths above. Never invent new paths.
+- Use the MOST SPECIFIC path. Examples:
+    • HER2 3+ (tissue biopsy) → diagnosis.biomarkers.ihc
+    • ANA negative, anti-Sjogren antibodies, hypogammaglobulinemia → diagnosis.biomarkers.serology
+    • EGFR Exon 19 deletion → diagnosis.biomarkers.ngs
+    • BRCA1 germline pathogenic → medical-history.family-history.syndromes
+    • Elevated homocysteine → medical-history.comorbidities.cardiovascular
+    • Elevated LDL, GERD, vitamin D level, eGFR → diagnosis.general.conditions
+- Keep labels short and clinically faithful (e.g. "Stage IIIA", "EGFR Exon 19 del").
+- Extract 5–15 keywords per excerpt. If nothing new, return [].
+- If a finding genuinely fits nowhere, skip it.
 
 Return ONLY a JSON array (no other text):
-[{{ "label": "<keyword>", "column_name": "<category>" }}]
+[{{ "label": "<keyword>", "taxonomy_path": "<path>" }}]"""
 
-Include 4-8 nodes per category. Use only the exact category names above."""
 
-    raw = bedrock_call(prompt)
-    start = raw.find("[")
-    end = raw.rfind("]") + 1
-    candidates = json.loads(raw[start:end])
+def _chunk_ehr_text(full_text: str, chunk_size: int = 200_000) -> list[str]:
+    """Split EHR text at document boundaries (=== filename ===) into ~chunk_size chunks."""
+    import re
+    parts = re.split(r"(=== .+? ===)", full_text)
+    chunks: list[str] = []
+    current = ""
+    for part in parts:
+        if len(current) + len(part) > chunk_size and current:
+            chunks.append(current)
+            current = part
+        else:
+            current += part
+    if current.strip():
+        chunks.append(current)
+    return chunks
+
+
+def _normalize_label(label: str) -> str:
+    """Lowercase + strip punctuation for dedup comparison."""
+    import re
+    return re.sub(r"[^a-z0-9 ]", "", label.lower()).strip()
+
+
+def extract_nodes(ehr: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract keywords from the full EHR text by chunking across all documents.
+
+    Sends each ~200k-char chunk to Bedrock separately, passing previously
+    seen labels so each call only returns genuinely new findings.
+    """
+    full_text = ehr["sections"].get("full_text", json.dumps(ehr["sections"]))
+    chunks = _chunk_ehr_text(full_text)
+    print(f"[extract] {len(chunks)} chunks from {len(full_text):,} chars")
+
+    all_candidates: list[dict[str, str]] = []
+    seen_normalized: set[str] = set()
+
+    for i, chunk in enumerate(chunks):
+        seen_summary = (
+            "; ".join(c["label"] for c in all_candidates[:60])
+            if all_candidates else "none yet"
+        )
+        prompt = EXTRACTION_PROMPT_TEMPLATE.format(
+            annotated_paths=ANNOTATED_PATHS,
+            seen=seen_summary,
+            chunk=chunk,
+        )
+        try:
+            raw = bedrock_call(prompt)
+            start = raw.find("[")
+            end = raw.rfind("]") + 1
+            new_candidates = json.loads(raw[start:end])
+        except Exception as e:
+            print(f"[extract] chunk {i+1} failed: {e}")
+            continue
+
+        added = 0
+        for c in new_candidates:
+            path = (c.get("taxonomy_path") or "").strip()
+            label = " ".join((c.get("label") or "").split())
+            if not label or path not in VALID_PATHS:
+                continue
+            norm = _normalize_label(label)
+            if norm in seen_normalized:
+                continue
+            seen_normalized.add(norm)
+            all_candidates.append({"label": label, "taxonomy_path": path})
+            added += 1
+
+        print(f"[extract] chunk {i+1}/{len(chunks)}: +{added} new keywords ({len(all_candidates)} total)")
 
     counters: dict[str, int] = {}
     nodes = []
-    for c in candidates:
-        col = c.get("column_name", "").strip()
-        if col not in VALID_COLUMNS:
-            continue
-        prefix = COLUMN_PREFIXES[col]
+    for c in all_candidates:
+        prefix = _prefix_for_path(c["taxonomy_path"])
         counters[prefix] = counters.get(prefix, 0) + 1
         nodes.append({
             "id": f"{prefix}-{counters[prefix]}",
-            "label": c["label"].strip(),
-            "column_name": col,
+            "label": c["label"],
+            "taxonomy_path": c["taxonomy_path"],
         })
 
-    print(f"[pass1] extracted {len(nodes)} nodes")
+    print(f"[extract] {len(nodes)} keywords across {len({n['taxonomy_path'] for n in nodes})} paths")
     return nodes
-
-
-def extract_edges(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    node_list = json.dumps([{"id": n["id"], "label": n["label"], "column_name": n["column_name"]} for n in nodes])
-    prompt = f"""Here is a list of medical keyword nodes extracted from a patient chart:
-{node_list}
-
-For each node, identify which other nodes it is clinically related to
-(e.g. a treatment connects to the diagnosis it was given for;
-a biomarker connects to the treatment it informed).
-
-Only reference node IDs from the list above. Do not invent new nodes.
-Each pair should be listed once (no duplicates in both directions).
-
-Return ONLY a JSON array (no other text):
-[{{ "from_id": "<id>", "to_id": "<id>" }}]"""
-
-    raw = bedrock_call(prompt)
-    start = raw.find("[")
-    end = raw.rfind("]") + 1
-    candidates = json.loads(raw[start:end])
-
-    valid_ids = {n["id"] for n in nodes}
-    edges = [
-        e for e in candidates
-        if e.get("from_id") in valid_ids and e.get("to_id") in valid_ids
-        and e["from_id"] != e["to_id"]
-    ]
-    print(f"[pass2] extracted {len(edges)} edges")
-    return edges
 
 
 # --- Phase 3b: PubMed pre-computation ---
 
 def fetch_pubmed(os: OpenSearch, keyword: str) -> list[dict[str, str]]:
+    # Fetch extra candidates so we have room to filter junk
     resp = os.search(
         index=OS_INDEX,
         body={
-            "size": 5,
+            "size": 20,
             "query": {
-                "multi_match": {
-                    "query": keyword,
-                    "fields": ["title^3", "text", "metadata.authors", "metadata.journal"],
+                "bool": {
+                    "must": {
+                        "multi_match": {
+                            "query": keyword,
+                            "fields": ["title^3", "text", "metadata.authors", "metadata.journal"],
+                        }
+                    },
+                    "filter": {"exists": {"field": "text"}},
                 }
             },
         },
@@ -238,14 +352,29 @@ def fetch_pubmed(os: OpenSearch, keyword: str) -> list[dict[str, str]]:
         src = hit["_source"]
         meta = src.get("metadata", {})
         pmid = src.get("pmid") or meta.get("pmid", "")
+        title = (src.get("title") or "").strip()
+        raw_text = (src.get("text") or "").strip()
+        # Strip papers with no real abstract: text too short or text is just the title
+        if len(raw_text) < 150:
+            continue
+        if raw_text.lower().strip("[]., ") == title.lower().strip("[]., "):
+            continue
+        # Strip leading title prefix (stored as "{title}. {abstract}" in the index)
+        if raw_text.lower().startswith(title.lower()):
+            abstract = raw_text[len(title):].lstrip(". ").strip()
+        else:
+            abstract = raw_text
+        abstract = abstract[:400]
         papers.append({
             "pmid": str(pmid),
-            "title": src.get("title", ""),
-            "abstract": (src.get("text") or "")[:300],
+            "title": title,
+            "abstract": abstract,
             "journal": meta.get("journal", ""),
             "year": str(meta.get("year", "")),
             "url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/" if pmid else "",
         })
+        if len(papers) == 5:
+            break
     return papers
 
 
@@ -265,25 +394,19 @@ def precompute_pubmed(nodes: list[dict[str, Any]], patient_id: str):
 
 # --- DB writes ---
 
-def write_to_db(patient_id: str, nodes: list[dict[str, Any]], edges: list[dict[str, Any]]):
+def write_to_db(patient_id: str, nodes: list[dict[str, Any]]):
     conn = db()
     cur = conn.cursor()
-    cur.execute("DELETE FROM keyword_edges WHERE patient_id = %s", (patient_id,))
     cur.execute("DELETE FROM keyword_nodes WHERE patient_id = %s", (patient_id,))
     for n in nodes:
         cur.execute(
-            "INSERT INTO keyword_nodes (id, patient_id, label, column_name) VALUES (%s, %s, %s, %s)",
-            (n["id"], patient_id, n["label"], n["column_name"]),
-        )
-    for e in edges:
-        cur.execute(
-            "INSERT INTO keyword_edges (patient_id, from_id, to_id) VALUES (%s, %s, %s)",
-            (patient_id, e["from_id"], e["to_id"]),
+            "INSERT INTO keyword_nodes (id, patient_id, label, taxonomy_path) VALUES (%s, %s, %s, %s)",
+            (n["id"], patient_id, n["label"], n["taxonomy_path"]),
         )
     cur.close()
     conn.commit()
     conn.close()
-    print(f"[db] wrote {len(nodes)} nodes + {len(edges)} edges for patient {patient_id}")
+    print(f"[db] wrote {len(nodes)} nodes for patient {patient_id}")
 
 
 # --- main ---
@@ -298,10 +421,42 @@ def run_pipeline(patient_id, pdf_path=None, skip_textract=False):
         raise ValueError("provide --pdf or --skip-textract")
 
     nodes = extract_nodes(ehr)
-    edges = extract_edges(nodes)
-    write_to_db(patient_id, nodes, edges)
+    write_to_db(patient_id, nodes)
     precompute_pubmed(nodes, patient_id)
     print(f"[pipeline] done for patient {patient_id}")
+
+
+def run_migration() -> str:
+    """Apply schema.sql to RDS. Safe to run repeatedly."""
+    import pathlib
+    sql = pathlib.Path(__file__).parent.joinpath("schema.sql").read_text()
+    conn = db()
+    cur = conn.cursor()
+    # pg8000 doesn't support multi-statement execute reliably; split on ';'
+    # but preserve DO $$ ... $$ blocks. Easiest: drive each top-level statement
+    # by scanning for `;` at column 0 of the trimmed line.
+    stmts: list[str] = []
+    buf: list[str] = []
+    in_dollar = False
+    for line in sql.splitlines():
+        if "$$" in line:
+            in_dollar = not in_dollar if line.count("$$") % 2 == 1 else in_dollar
+        buf.append(line)
+        if line.rstrip().endswith(";") and not in_dollar:
+            stmt = "\n".join(buf).strip()
+            if stmt:
+                stmts.append(stmt)
+            buf = []
+    if buf:
+        tail = "\n".join(buf).strip()
+        if tail:
+            stmts.append(tail)
+    for s in stmts:
+        cur.execute(s)
+    cur.close()
+    conn.commit()
+    conn.close()
+    return f"applied {len(stmts)} statements"
 
 
 def lambda_handler(event, context):
@@ -313,8 +468,12 @@ def lambda_handler(event, context):
         run_pipeline(patient_id, skip_textract=False)
         return {"statusCode": 200, "patient_id": patient_id}
 
-    patient_id = event["patient_id"]
     step = event.get("step", "full")
+    if step == "migrate":
+        result = run_migration()
+        return {"statusCode": 200, "step": "migrate", "result": result}
+
+    patient_id = event["patient_id"]
 
     if step == "precompute_pubmed":
         conn = db()
