@@ -83,6 +83,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .slice(0, 2);
   };
 
+  const ensureProfileRow = async (
+    userId: string,
+    email: string,
+    fullName: string,
+    specialty: string,
+    institution: string,
+    avatarInitials: string,
+  ) => {
+    const row = {
+      id: userId,
+      email,
+      full_name: fullName,
+      specialty,
+      institution,
+      avatar_initials: avatarInitials,
+    };
+    // Upsert avoids races; RLS requires auth.uid() = id (session must be set)
+    const { error } = await supabase.from('profiles').upsert(row, { onConflict: 'id' });
+    return error ?? null;
+  };
+
   const signUp = async (email: string, password: string, fullName: string, specialty: string, institution: string) => {
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -99,38 +120,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const newUser = data?.user;
     const newSession = data?.session;
-    if (newUser) {
-      // Small delay to let auth.users row fully commit
-      await new Promise(resolve => setTimeout(resolve, 500));
+    const initials = getInitials(fullName);
+    if (!newUser) return { error: null };
 
-      let profileError: Error | null = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const { error: err } = await supabase.rpc('create_profile', {
-          user_id: newUser.id,
-          user_email: email,
-          user_full_name: fullName,
-          user_specialty: specialty,
-          user_institution: institution,
-          user_avatar_initials: getInitials(fullName),
-        });
-        if (!err) {
-          profileError = null;
-          break;
-        }
-        profileError = err as Error;
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-
-      if (profileError) {
-        return { error: new Error('Account created but failed to save profile: ' + profileError.message) };
-      }
-      await fetchProfile(newUser.id);
-
-      if (newSession) {
-        setSession(newSession);
-        setUser(newUser);
-      }
+    // Email confirmation enabled: Supabase returns user but no session until the user verifies email.
+    // RLS on profiles requires auth.uid() = id, so we cannot insert until they have a session.
+    // Profile row is created on first signIn (see signIn below).
+    if (!newSession) {
+      return { error: null };
     }
+
+    await supabase.auth.setSession({
+      access_token: newSession.access_token,
+      refresh_token: newSession.refresh_token,
+    });
+
+    let profileError: Error | null = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      profileError = await ensureProfileRow(newUser.id, email, fullName, specialty, institution, initials);
+      if (!profileError) break;
+      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+    }
+
+    if (profileError) {
+      return { error: new Error('Account created but failed to save profile: ' + profileError.message) };
+    }
+
+    await fetchProfile(newUser.id);
+    setSession(newSession);
+    setUser(newUser);
 
     return { error: null };
   };
@@ -144,19 +162,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .from('profiles')
         .select('id')
         .eq('id', data.user.id)
-        .single();
+        .maybeSingle();
 
       if (!existingProfile) {
         const name = data.user.user_metadata?.full_name || email.split('@')[0];
-        const initials = name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
-        await supabase.rpc('create_profile', {
-          user_id: data.user.id,
-          user_email: email,
-          user_full_name: name,
-          user_specialty: '',
-          user_institution: '',
-          user_avatar_initials: initials,
-        }).then(() => {}, () => {});
+        const initials = name
+          .split(' ')
+          .map((n: string) => n[0])
+          .join('')
+          .toUpperCase()
+          .slice(0, 2);
+        await ensureProfileRow(data.user.id, email, name, '', '', initials);
       }
     }
 
