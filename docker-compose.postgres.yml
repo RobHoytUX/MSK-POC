@@ -1,0 +1,20 @@
+# Optional local Postgres for keyword_nodes + API dev.
+# Start: docker compose -f docker-compose.postgres.yml up -d
+# Then: DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5433/neuronode \
+#   cd backend/api && . .venv/bin/activate && python seed_patient_keywords.py
+
+services:
+  neuronode-db:
+    image: postgres:16-alpine
+    container_name: msk-neuronode-pg
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: neuronode
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 5s
+      retries: 10

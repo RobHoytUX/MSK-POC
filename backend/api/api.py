@@ -7,10 +7,13 @@ from typing import Any
 
 import boto3
 import pg8000.dbapi
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 from pydantic import BaseModel
+
+load_dotenv()
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 DYNAMODB_TABLE = os.environ.get("DYNAMODB_TABLE", "neuronode_pubmed_cache")
@@ -161,25 +164,8 @@ def keyword_tree(patient_id: str):
     if not rows:
         raise HTTPException(status_code=404, detail="tree not ready")
 
-    # Check which leaves have cached PubMed results so the UI can hint affordance.
-    node_ids = [r["id"] for r in rows]
-    available: set[str] = set()
-    if node_ids:
-        try:
-            table = dynamo()
-            # DynamoDB batch_get caps at 100 keys; chunk if needed.
-            for i in range(0, len(node_ids), 100):
-                chunk = node_ids[i : i + 100]
-                resp = table.meta.client.batch_get_item(
-                    RequestItems={table.name: {"Keys": [{"node_id": nid} for nid in chunk]}}
-                )
-                for item in resp.get("Responses", {}).get(table.name, []):
-                    available.add(item["node_id"])
-        except Exception as e:
-            # If DynamoDB is unreachable, default to "available" so clicks at
-            # least attempt a fetch — the per-node endpoint will 404 cleanly.
-            print(f"[keyword-tree] pubmed availability check skipped: {e}")
-            available = set(node_ids)
+    # Clients always call the per-node PubMed endpoint for leaves; every node is
+    # eligible to try. (Previous Dynamo pre-check hid lookups before they ran.)
 
     return {
         "patient_id": patient_id,
@@ -188,7 +174,7 @@ def keyword_tree(patient_id: str):
                 "id": r["id"],
                 "label": r["label"],
                 "taxonomy_path": r["taxonomy_path"],
-                "pubmed_available": r["id"] in available,
+                "pubmed_available": True,
             }
             for r in rows
         ],

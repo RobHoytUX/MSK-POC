@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Tree, { type CustomNodeElementProps, type RawNodeDatum } from 'react-d3-tree'
-import type { TreeNode, TreeNodeType } from '../lib/treeTaxonomy'
+import { pruneHiddenFromTree, type TreeNode, type TreeNodeType } from '../lib/treeTaxonomy'
 
 /**
  * Hierarchical keyword tree rendered with react-d3-tree.
@@ -17,14 +17,17 @@ interface KeywordTreeProps {
   tree: TreeNode
   onNodeClick: (node: TreeNode) => void
   selectedNodeId?: string | null
+  /** Node ids suppressed in the dendrogram (any subtree root; chips + toggles drive this set). */
+  hiddenLeafIds?: ReadonlySet<string>
   className?: string
 }
 
 const TYPE_STYLE: Record<TreeNodeType, { fill: string; stroke: string; r: number; textWeight: number }> = {
   patient:     { fill: '#7c3aed', stroke: '#7c3aed', r: 14, textWeight: 700 },
   branch:      { fill: '#f59e0b', stroke: '#f59e0b', r: 10, textWeight: 600 },
-  category:    { fill: '#ffffff', stroke: '#94a3b8', r: 8,  textWeight: 500 },
-  subcategory: { fill: '#ffffff', stroke: '#cbd5e1', r: 6,  textWeight: 400 },
+  /** Not pure white — reads on slate-50 / white keyword canvas backgrounds */
+  category:    { fill: '#e2e8f0', stroke: '#64748b', r: 8,  textWeight: 500 },
+  subcategory: { fill: '#f1f5f9', stroke: '#94a3b8', r: 6,  textWeight: 400 },
   leaf:        { fill: '#10b981', stroke: '#10b981', r: 6,  textWeight: 500 },
 }
 
@@ -47,9 +50,20 @@ function toRawDatum(node: TreeNode): RawNodeDatum {
   }
 }
 
-export default function KeywordTree({ tree, onNodeClick, selectedNodeId, className }: KeywordTreeProps) {
+export default function KeywordTree({
+  tree,
+  onNodeClick,
+  selectedNodeId,
+  hiddenLeafIds,
+  className,
+}: KeywordTreeProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [translate, setTranslate] = useState<{ x: number; y: number }>({ x: 80, y: 300 })
+
+  const displayTree = useMemo(() => {
+    if (!hiddenLeafIds?.size) return tree
+    return pruneHiddenFromTree(tree, hiddenLeafIds)
+  }, [tree, hiddenLeafIds])
 
   // index source nodes by id for fast lookup on click
   const nodeIndex = useMemo(() => {
@@ -62,7 +76,7 @@ export default function KeywordTree({ tree, onNodeClick, selectedNodeId, classNa
     return map
   }, [tree])
 
-  const data = useMemo<RawNodeDatum>(() => toRawDatum(tree), [tree])
+  const data = useMemo<RawNodeDatum>(() => toRawDatum(displayTree), [displayTree])
 
   // center the tree vertically on mount and on resize
   useEffect(() => {
@@ -115,9 +129,14 @@ export default function KeywordTree({ tree, onNodeClick, selectedNodeId, classNa
     [nodeIndex, onNodeClick, selectedNodeId],
   )
 
+  const treeKeySignature = hiddenLeafIds?.size
+    ? [...hiddenLeafIds].sort().join('|')
+    : 'all'
+
   return (
     <div ref={containerRef} className={className ?? 'w-full h-full min-h-[600px]'}>
       <Tree
+        key={treeKeySignature}
         data={data}
         orientation="horizontal"
         translate={translate}

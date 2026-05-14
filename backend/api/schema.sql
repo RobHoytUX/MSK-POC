@@ -1,15 +1,8 @@
 CREATE TABLE IF NOT EXISTS keyword_nodes (
-  id          text,
-  patient_id  text,
-  label       text NOT NULL,
-  column_name text NOT NULL CHECK (column_name IN (
-    'Patient Data',
-    'Categories',
-    'Specifics',
-    'Treatments',
-    'Biomarkers',
-    'Monitoring'
-  )),
+  id            text,
+  patient_id    text,
+  label         text NOT NULL,
+  taxonomy_path text NOT NULL,
   PRIMARY KEY (patient_id, id)
 );
 

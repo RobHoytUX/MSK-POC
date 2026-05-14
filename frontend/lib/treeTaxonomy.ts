@@ -235,5 +235,72 @@ export function buildPatientTree(
     }
   }
 
-  return prune(tree)
+  const pruned = prune(tree)
+
+  // No matching leaves (API empty/down or unknown paths) wipes the scaffold —
+  // the tree would shrink to only the purple root dot and reads as "blank Keywords".
+  if (!pruned.children?.length) {
+    const fallback = cloneScaffold()
+    fallback.label = patientName
+    return fallback
+  }
+
+  return pruned
+}
+
+/** All leaf nodes anywhere under `root`. */
+export function collectLeafDescendants(root: TreeNode): TreeNode[] {
+  const out: TreeNode[] = []
+  const walk = (n: TreeNode) => {
+    if (n.type === 'leaf') out.push(n)
+    n.children?.forEach(walk)
+  }
+  walk(root)
+  return out
+}
+
+function subtreeContainsLeaf(n: TreeNode): boolean {
+  if (n.type === 'leaf') return true
+  return n.children?.some(subtreeContainsLeaf) ?? false
+}
+
+/**
+ * Drops any subtree rooted at ids in hiddenIds (including leaves), then prunes empty
+ * scaffold branches that no longer terminate in a keyword leaf — same cleanup as taxonomy-only trees.
+ */
+export function pruneHiddenFromTree(tree: TreeNode, hiddenIds: ReadonlySet<string>): TreeNode {
+  function walk(n: TreeNode): TreeNode | null {
+    if (hiddenIds.has(n.id)) return null
+    const raw = n.children ?? []
+    const mapped = raw.map(walk).filter((c): c is TreeNode => c !== null)
+    const next = mapped.filter((ch) => ch.type === 'leaf' || subtreeContainsLeaf(ch))
+    return next.length > 0 ? { ...n, children: next } : { ...n, children: undefined }
+  }
+  return walk(tree) ?? tree
+}
+
+/** @deprecated Use pruneHiddenFromTree — hiddenIds may contain any subtree root id */
+export function pruneHiddenLeaves(tree: TreeNode, hiddenIds: ReadonlySet<string>): TreeNode {
+  return pruneHiddenFromTree(tree, hiddenIds)
+}
+
+/** Locate a node anywhere under `root` (depth-first). */
+export function findTreeNodeById(root: TreeNode, id: string): TreeNode | null {
+  if (root.id === id) return root
+  for (const ch of root.children ?? []) {
+    const hit = findTreeNodeById(ch, id)
+    if (hit) return hit
+  }
+  return null
+}
+
+/** Preorder of every node except patient/root — chip list mirrors full taxonomy (+ API leaves). */
+export function flattenKeywordTreeChipNodes(root: TreeNode): TreeNode[] {
+  const out: TreeNode[] = []
+  const walk = (n: TreeNode) => {
+    if (n.type !== 'patient') out.push(n)
+    n.children?.forEach(walk)
+  }
+  walk(root)
+  return out
 }
