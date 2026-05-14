@@ -1,6 +1,5 @@
 /**
  * Clinical Intelligence API — longitudinal records + RAG chat.
- * @see Integration guide surfaced in ClinicalIntelligenceApiGuideDialog
  */
 
 const DEFAULT_CI_BASE = "http://18.191.159.27:8000";

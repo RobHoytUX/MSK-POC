@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, CalendarDays, Bell, SlidersHorizontal, Layers3, Stethoscope, Microscope, UserRound, UsersRound, PanelRightOpen, ListFilter, ChevronLeft, ChevronRight, BookOpen } from "lucide-react";
+import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, CalendarDays, Bell, SlidersHorizontal, Layers3, Stethoscope, Microscope, UserRound, UsersRound, PanelRightOpen, ListFilter, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -33,7 +33,6 @@ import {
   resolveClinicalPatientId,
 } from "../lib/clinicalIntelligence";
 import ClinicalTimelineSidebar from "./ClinicalTimelineSidebar";
-import ClinicalIntelligenceApiGuideDialog from "./ClinicalIntelligenceApiGuideDialog";
 import ComparePatientPanel from './ComparePatientPanel';
 import PatientComparisonView from './PatientComparisonView';
 import TrialQualificationPanel from './TrialQualificationPanel';
@@ -609,7 +608,6 @@ export default function CancerTreatmentDashboard({
   const [clinicalTimelineData, setClinicalTimelineData] = useState<ClinicalTimelineResponse | null>(null);
   const [clinicalTimelineLoading, setClinicalTimelineLoading] = useState(false);
   const [clinicalTimelineError, setClinicalTimelineError] = useState<string | null>(null);
-  const [clinicalApiGuideOpen, setClinicalApiGuideOpen] = useState(false);
   const [clinicalChatPending, setClinicalChatPending] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
@@ -1390,15 +1388,6 @@ export default function CancerTreatmentDashboard({
                         News Feed
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => setClinicalApiGuideOpen(true)}
-                      className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-full transition-colors"
-                      title="Clinical Intelligence API overview"
-                    >
-                      <BookOpen className="w-4 h-4" />
-                      API guide
-                    </button>
                     <button
                       onClick={() => {
                         setIsAIPanelOpen(true);
@@ -2329,7 +2318,6 @@ export default function CancerTreatmentDashboard({
       {/* News Feed Side Panel */}
       <NewsFeedPanel isOpen={isNewsFeedOpen} onClose={() => setIsNewsFeedOpen(false)} />
 
-      <ClinicalIntelligenceApiGuideDialog open={clinicalApiGuideOpen} onOpenChange={setClinicalApiGuideOpen} />
 
       {/* Profile Panel */}
       <ProfilePanel isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
