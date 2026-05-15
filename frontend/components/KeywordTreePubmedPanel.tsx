@@ -16,10 +16,12 @@ interface Props {
   patient: Patient | null
   keywordTreeFull: TreeNode | null
   selectedNode: TreeNode | null
-  /** User-toggled subtree roots removed from pruning (shown as “collapsed” chips). */
-  hiddenSubtreeRootIds?: ReadonlySet<string>
-  onToggleNodeVisibility?: (node: TreeNode) => void
-  onResetAllHidden?: () => void
+  /** Taxonomy node ids currently intersecting the tree viewport (zoom/pan). `null` = not measured yet — show all chips. */
+  viewportVisibleNodeIds?: ReadonlySet<string> | null
+  /** User toggled keywords off visually (grey/strike); tree nodes stay rendered. */
+  dimmedNodeIds?: ReadonlySet<string>
+  onToggleDimmedKeyword?: (node: TreeNode) => void
+  onResetDimmedKeywords?: () => void
   onClose: () => void
 }
 
@@ -27,9 +29,10 @@ export default function KeywordTreePubmedPanel({
   patient,
   keywordTreeFull,
   selectedNode,
-  hiddenSubtreeRootIds,
-  onToggleNodeVisibility,
-  onResetAllHidden,
+  viewportVisibleNodeIds,
+  dimmedNodeIds,
+  onToggleDimmedKeyword,
+  onResetDimmedKeywords,
   onClose,
 }: Props) {
   const [papers, setPapers] = useState<PubmedPaper[]>([])
@@ -65,15 +68,22 @@ export default function KeywordTreePubmedPanel({
     }
   }, [selectedNode])
 
-  const keywordChips = useMemo(() => {
+  const allKeywordChips = useMemo(() => {
     if (!keywordTreeFull) return []
     return flattenKeywordTreeChipNodes(keywordTreeFull).sort((a, b) =>
       a.taxonomyPath.localeCompare(b.taxonomyPath, undefined, { sensitivity: 'base' }),
     )
   }, [keywordTreeFull])
 
-  const chipsEnabled = Boolean(keywordTreeFull && onToggleNodeVisibility)
-  const explicitCollapsedCount = hiddenSubtreeRootIds?.size ?? 0
+  const keywordChips = useMemo(() => {
+    if (viewportVisibleNodeIds === null || viewportVisibleNodeIds === undefined) {
+      return allKeywordChips
+    }
+    return allKeywordChips.filter((chip) => viewportVisibleNodeIds.has(chip.id))
+  }, [allKeywordChips, viewportVisibleNodeIds])
+
+  const chipsEnabled = Boolean(keywordTreeFull && onToggleDimmedKeyword)
+  const dimmedCount = dimmedNodeIds?.size ?? 0
 
   const isLeaf = selectedNode?.type === 'leaf'
 
@@ -129,8 +139,15 @@ export default function KeywordTreePubmedPanel({
                 Keywords
               </p>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                <span className="tabular-nums">{keywordChips.length}</span> keywords ·{' '}
-                <span className="tabular-nums">{explicitCollapsedCount}</span> hidden by you
+                <span className="tabular-nums">{keywordChips.length}</span>{' '}
+                {viewportVisibleNodeIds !== null && viewportVisibleNodeIds !== undefined
+                  ? 'visible in view'
+                  : 'keywords'}
+                {viewportVisibleNodeIds !== null && viewportVisibleNodeIds !== undefined && allKeywordChips.length > 0
+                  ? ` · ${allKeywordChips.length} total in tree`
+                  : ''}{' '}
+                · <span className="tabular-nums">{dimmedCount}</span>{' '}
+                greyed/strike in tree
                 {!chipsExpanded && keywordChips.length > 0 && (
                   <span className="text-slate-400"> · keyword list tucked away</span>
                 )}
@@ -145,13 +162,13 @@ export default function KeywordTreePubmedPanel({
               >
                 {chipsExpanded ? 'Hide keywords' : 'Show keywords'}
               </button>
-              {explicitCollapsedCount > 0 && onResetAllHidden ? (
+              {dimmedCount > 0 && onResetDimmedKeywords ? (
                 <button
                   type="button"
-                  onClick={onResetAllHidden}
+                  onClick={onResetDimmedKeywords}
                   className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
                 >
-                  Reset all
+                  Clear greyed
                 </button>
               ) : null}
             </div>
@@ -159,31 +176,31 @@ export default function KeywordTreePubmedPanel({
           {chipsExpanded ? (
             <>
               <p className="text-[11px] text-slate-500 mb-2.5">
-                Only the chip you click is dimmed. It removes that subtree from the dendrogram; other keyword chips
-                keep their styling until you toggle them individually.
+                Chips follow what intersects the tree view as you zoom and pan. Click a chip to grey and strike its
+                label on the tree; click again to restore.
               </p>
               <div className="flex flex-wrap gap-1.5 max-h-[min(280px,42vh)] overflow-y-auto pb-1">
                 {keywordChips.map((chip) => {
-                  const userCollapsedThis = Boolean(hiddenSubtreeRootIds?.has(chip.id))
+                  const dimmedInTree = Boolean(dimmedNodeIds?.has(chip.id))
                   const abbreviated = chipTypeAbbrev(chip.type)
                   const label = `${chip.label}: ${
-                    userCollapsedThis ? 'collapsed — click to expand this branch again' : 'expanded — click to hide this branch'
+                    dimmedInTree ? 'greyed in tree — click to highlight again' : 'normal — click to grey in tree'
                   }`
                   return (
                     <button
                       key={chip.id}
                       type="button"
                       role="switch"
-                      aria-checked={!userCollapsedThis}
+                      aria-checked={!dimmedInTree}
                       aria-label={label}
-                      onClick={() => onToggleNodeVisibility?.(chip)}
+                      onClick={() => onToggleDimmedKeyword?.(chip)}
                       title={
-                        hiddenSubtreeRootIds?.has(chip.id)
-                          ? 'Undo collapse for this node'
-                          : 'Collapse this node and its subtree on the dendrogram'
+                        dimmedInTree
+                          ? 'Show this keyword normally on the tree'
+                          : 'Grey and strike this keyword on the tree'
                       }
                       className={`flex max-w-[min(260px,100%)] items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-left text-[11px] font-medium leading-snug transition-all ${
-                        userCollapsedThis
+                        dimmedInTree
                           ? 'border-slate-300 bg-slate-100 text-slate-600 opacity-[0.82] grayscale-[0.25] hover:bg-slate-200/70'
                           : 'border-emerald-200 bg-white text-slate-800 shadow-sm ring-1 ring-emerald-100 hover:border-emerald-400 hover:bg-emerald-50/40'
                       }`}
@@ -191,11 +208,21 @@ export default function KeywordTreePubmedPanel({
                       <span className="shrink-0 tabular-nums rounded bg-slate-200/70 px-1 py-px text-[9px] font-semibold uppercase text-slate-600">
                         {abbreviated}
                       </span>
-                      <span className="min-w-0 flex-1 truncate">{chip.label}</span>
+                      <span
+                        className={`min-w-0 flex-1 truncate ${dimmedInTree ? 'line-through text-slate-500' : ''}`}
+                      >
+                        {chip.label}
+                      </span>
                     </button>
                   )
                 })}
               </div>
+              {keywordChips.length === 0 && allKeywordChips.length > 0 ? (
+                <p className="text-[11px] text-slate-600 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2 mt-2">
+                  Nothing in the current dendrogram framing overlaps this panel—zoom out or pan so taxonomy nodes enter
+                  the tree area.
+                </p>
+              ) : null}
             </>
           ) : null}
         </div>

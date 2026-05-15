@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Tree, { type CustomNodeElementProps, type RawNodeDatum } from 'react-d3-tree'
-import { pruneHiddenFromTree, type TreeNode, type TreeNodeType } from '../lib/treeTaxonomy'
+import type { TreeNode, TreeNodeType } from '../lib/treeTaxonomy'
+
+function rectsIntersect(a: DOMRectReadOnly, b: DOMRectReadOnly): boolean {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
+}
 
 /**
  * Hierarchical keyword tree rendered with react-d3-tree.
@@ -17,8 +21,10 @@ interface KeywordTreeProps {
   tree: TreeNode
   onNodeClick: (node: TreeNode) => void
   selectedNodeId?: string | null
-  /** Node ids suppressed in the dendrogram (any subtree root; chips + toggles drive this set). */
-  hiddenLeafIds?: ReadonlySet<string>
+  /** Strike / grey styling when the chip is toggled off visually (does not remove nodes). */
+  dimmedNodeIds?: ReadonlySet<string>
+  /** After zoom / pan / layout, ids of taxonomy nodes whose graphics intersect the viewport. */
+  onVisibleNodeIdsChange?: (visibleIds: Set<string>) => void
   className?: string
 }
 
@@ -29,6 +35,14 @@ const TYPE_STYLE: Record<TreeNodeType, { fill: string; stroke: string; r: number
   category:    { fill: '#e2e8f0', stroke: '#64748b', r: 8,  textWeight: 500 },
   subcategory: { fill: '#f1f5f9', stroke: '#94a3b8', r: 6,  textWeight: 400 },
   leaf:        { fill: '#10b981', stroke: '#10b981', r: 6,  textWeight: 500 },
+}
+
+const DIMMED_ADJUST: Record<TreeNodeType, { fill: string; stroke: string }> = {
+  patient:     { fill: '#c4b5fd', stroke: '#94a3b8' },
+  branch:      { fill: '#fde68a', stroke: '#94a3b8' },
+  category:    { fill: '#e2e8f0', stroke: '#cbd5e1' },
+  subcategory: { fill: '#e2e8f0', stroke: '#cbd5e1' },
+  leaf:        { fill: '#94a3b8', stroke: '#cbd5e1' },
 }
 
 interface NodeAttributes {
@@ -54,18 +68,15 @@ export default function KeywordTree({
   tree,
   onNodeClick,
   selectedNodeId,
-  hiddenLeafIds,
+  dimmedNodeIds,
+  onVisibleNodeIdsChange,
   className,
 }: KeywordTreeProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [translate, setTranslate] = useState<{ x: number; y: number }>({ x: 80, y: 300 })
+  const rafRef = useRef<number | undefined>(undefined)
+  const lastEmittedSigRef = useRef('')
 
-  const displayTree = useMemo(() => {
-    if (!hiddenLeafIds?.size) return tree
-    return pruneHiddenFromTree(tree, hiddenLeafIds)
-  }, [tree, hiddenLeafIds])
-
-  // index source nodes by id for fast lookup on click
   const nodeIndex = useMemo(() => {
     const map = new Map<string, TreeNode>()
     function walk(n: TreeNode) {
@@ -76,26 +87,88 @@ export default function KeywordTree({
     return map
   }, [tree])
 
-  const data = useMemo<RawNodeDatum>(() => toRawDatum(displayTree), [displayTree])
+  const data = useMemo<RawNodeDatum>(() => toRawDatum(tree), [tree])
 
-  // center the tree vertically on mount and on resize
+  const notifyVisibleIds = useCallback(
+    (visible: Set<string>) => {
+      if (!onVisibleNodeIdsChange) return
+      const sig = [...visible].sort().join('\x1e')
+      if (sig === lastEmittedSigRef.current) return
+      lastEmittedSigRef.current = sig
+      onVisibleNodeIdsChange(new Set(visible))
+    },
+    [onVisibleNodeIdsChange],
+  )
+
+  const measureViewportNodes = useCallback(() => {
+    const rootEl = containerRef.current
+    if (!rootEl || !onVisibleNodeIdsChange) return
+    const cr = rootEl.getBoundingClientRect()
+    if (cr.width < 16 || cr.height < 16) return
+
+    const els = rootEl.querySelectorAll<SVGElement>('[data-keyword-tree-node-id]')
+    const visible = new Set<string>()
+    for (let i = 0; i < els.length; i++) {
+      const id = els[i].getAttribute('data-keyword-tree-node-id')
+      if (!id) continue
+      const box = els[i].getBoundingClientRect()
+      if (!box.width || !box.height) continue
+      if (rectsIntersect(box, cr)) visible.add(id)
+    }
+    notifyVisibleIds(visible)
+  }, [notifyVisibleIds, onVisibleNodeIdsChange])
+
+  const scheduleMeasure = useCallback(() => {
+    if (!onVisibleNodeIdsChange) return
+    if (rafRef.current !== undefined) cancelAnimationFrame(rafRef.current)
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = undefined
+      measureViewportNodes()
+    })
+  }, [measureViewportNodes, onVisibleNodeIdsChange])
+
+  /** New dataset / patient resets dedupe baseline so identical layouts still emit once. */
+  useEffect(() => {
+    lastEmittedSigRef.current = ''
+    scheduleMeasure()
+  }, [data, scheduleMeasure])
+
   useEffect(() => {
     function recenter() {
       if (!containerRef.current) return
       const { width, height } = containerRef.current.getBoundingClientRect()
       setTranslate({ x: Math.max(80, width * 0.12), y: height / 2 })
+      scheduleMeasure()
     }
     recenter()
     window.addEventListener('resize', recenter)
     return () => window.removeEventListener('resize', recenter)
-  }, [])
+  }, [scheduleMeasure])
+
+  useLayoutEffect(() => {
+    scheduleMeasure()
+  }, [scheduleMeasure])
+
+  useEffect(() => {
+    const root = containerRef.current
+    if (!root || !onVisibleNodeIdsChange) return
+    const ro = new ResizeObserver(() => scheduleMeasure())
+    ro.observe(root)
+    return () => ro.disconnect()
+  }, [scheduleMeasure, onVisibleNodeIdsChange])
+
+  const handleTreeUpdate = useCallback(() => {
+    scheduleMeasure()
+  }, [scheduleMeasure])
 
   const renderNode = useCallback(
     ({ nodeDatum, toggleNode }: CustomNodeElementProps) => {
       const attrs = (nodeDatum.attributes ?? {}) as unknown as NodeAttributes
       const type = (attrs.type ?? 'leaf') as TreeNodeType
-      const style = TYPE_STYLE[type]
+      const base = TYPE_STYLE[type]
       const sourceId = attrs.nodeId as string
+      const dimmed = dimmedNodeIds?.has(sourceId) ?? false
+      const strokeFill = dimmed ? DIMMED_ADJUST[type] : { fill: base.fill, stroke: base.stroke }
       const isSelected = selectedNodeId === sourceId
 
       const handleClick = (e: React.MouseEvent) => {
@@ -106,37 +179,43 @@ export default function KeywordTree({
       }
 
       return (
-        <g onClick={handleClick} style={{ cursor: 'pointer' }}>
+        <g
+          data-keyword-tree-node-id={sourceId}
+          onClick={handleClick}
+          style={{ cursor: 'pointer', opacity: dimmed ? 0.52 : 1 }}
+        >
           <circle
-            r={style.r}
-            fill={style.fill}
-            stroke={isSelected ? '#0f172a' : style.stroke}
+            r={base.r}
+            fill={strokeFill.fill}
+            stroke={isSelected ? '#0f172a' : strokeFill.stroke}
             strokeWidth={isSelected ? 3 : 1.5}
           />
           <text
-            x={style.r + 8}
+            x={base.r + 8}
             y={4}
             fontSize={type === 'patient' ? 16 : type === 'branch' ? 14 : 12}
-            fontWeight={style.textWeight}
-            fill="#0f172a"
-            style={{ userSelect: 'none', paintOrder: 'stroke', stroke: '#ffffff', strokeWidth: 3 }}
+            fontWeight={base.textWeight}
+            fill={dimmed ? '#94a3b8' : '#0f172a'}
+            style={{
+              userSelect: 'none',
+              paintOrder: 'stroke',
+              stroke: '#ffffff',
+              strokeWidth: 3,
+              textDecoration: dimmed ? 'line-through' : 'none',
+              textDecorationColor: '#94a3b8',
+            }}
           >
             {nodeDatum.name}
           </text>
         </g>
       )
     },
-    [nodeIndex, onNodeClick, selectedNodeId],
+    [dimmedNodeIds, nodeIndex, onNodeClick, selectedNodeId],
   )
-
-  const treeKeySignature = hiddenLeafIds?.size
-    ? [...hiddenLeafIds].sort().join('|')
-    : 'all'
 
   return (
     <div ref={containerRef} className={className ?? 'w-full h-full min-h-[600px]'}>
       <Tree
-        key={treeKeySignature}
         data={data}
         orientation="horizontal"
         translate={translate}
@@ -148,6 +227,7 @@ export default function KeywordTree({
         nodeSize={{ x: 240, y: 56 }}
         zoom={0.8}
         scaleExtent={{ min: 0.2, max: 2 }}
+        onUpdate={onVisibleNodeIdsChange ? handleTreeUpdate : undefined}
       />
     </div>
   )

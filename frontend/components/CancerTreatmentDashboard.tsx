@@ -22,7 +22,6 @@ import KeywordTree from './KeywordTree';
 import KeywordTreePubmedPanel from './KeywordTreePubmedPanel';
 import {
   findTreeNodeById,
-  pruneHiddenFromTree,
   type TreeNode,
 } from "../lib/treeTaxonomy";
 import { buildKeywordTreeForPatient, fetchKeywordTree } from '../lib/api';
@@ -629,7 +628,25 @@ export default function CancerTreatmentDashboard({
   const [keywordTree, setKeywordTree] = useState<TreeNode | null>(null);
   const [selectedTreeNode, setSelectedTreeNode] = useState<TreeNode | null>(null);
   const [keywordTreeError, setKeywordTreeError] = useState<string | null>(null);
-  const [keywordTreeHiddenLeafIds, setKeywordTreeHiddenLeafIds] = useState<Set<string>>(() => new Set());
+  const [keywordTreeDimmedIds, setKeywordTreeDimmedIds] = useState<Set<string>>(() => new Set());
+  /** `null` until first viewport sample — keyword panel lists the full taxonomy until measurement runs. */
+  const [keywordTreeViewportVisibleIds, setKeywordTreeViewportVisibleIds] = useState<Set<string> | null>(null);
+
+  const onKeywordTreeVisibleIdsChange = useCallback((ids: Set<string>) => {
+    setKeywordTreeViewportVisibleIds((prev) => {
+      if (prev !== null && prev.size === ids.size) {
+        let same = true;
+        for (const id of prev) {
+          if (!ids.has(id)) {
+            same = false;
+            break;
+          }
+        }
+        if (same) return prev;
+      }
+      return new Set(ids);
+    });
+  }, []);
 
   useEffect(() => {
     if (!selectedPatient) {
@@ -657,30 +674,30 @@ export default function CancerTreatmentDashboard({
   }, [selectedPatient]);
 
   useEffect(() => {
-    setKeywordTreeHiddenLeafIds(new Set());
+    setKeywordTreeDimmedIds(new Set());
+    setKeywordTreeViewportVisibleIds(null);
   }, [selectedPatient?.id, keywordTree]);
 
-  const keywordTreeVisibleSnapshot = useMemo(() => {
-    if (!keywordTree) return null;
-    return keywordTreeHiddenLeafIds.size > 0
-      ? pruneHiddenFromTree(keywordTree, keywordTreeHiddenLeafIds)
-      : keywordTree;
-  }, [keywordTree, keywordTreeHiddenLeafIds]);
+  useEffect(() => {
+    if (activeView === 'timeline' && discoveryTab === 'keywords') {
+      setKeywordTreeViewportVisibleIds(null);
+    }
+  }, [activeView, discoveryTab]);
 
   useEffect(() => {
     setSelectedTreeNode((cur) => {
-      if (!cur || !keywordTreeVisibleSnapshot) return cur;
-      return findTreeNodeById(keywordTreeVisibleSnapshot, cur.id) ? cur : null;
+      if (!cur || !keywordTree) return cur;
+      return findTreeNodeById(keywordTree, cur.id) ? cur : null;
     });
-  }, [keywordTreeVisibleSnapshot]);
+  }, [keywordTree]);
 
-  const toggleKeywordTreeNodeVisibility = useCallback(
+  const toggleKeywordTreeDimmed = useCallback(
     (node: TreeNode) => {
       if (!keywordTree || node.type === 'patient') return;
       const target = findTreeNodeById(keywordTree, node.id);
       if (!target) return;
 
-      setKeywordTreeHiddenLeafIds((prev) => {
+      setKeywordTreeDimmedIds((prev) => {
         const next = new Set(prev);
         if (next.has(target.id)) next.delete(target.id);
         else next.add(target.id);
@@ -690,8 +707,8 @@ export default function CancerTreatmentDashboard({
     [keywordTree],
   );
 
-  const resetKeywordTreeAllHidden = useCallback(() => {
-    setKeywordTreeHiddenLeafIds(new Set());
+  const resetKeywordTreeDimmed = useCallback(() => {
+    setKeywordTreeDimmedIds(new Set());
   }, []);
 
   const trialKeywordCanvasPatient = useMemo(
@@ -1179,7 +1196,8 @@ export default function CancerTreatmentDashboard({
                   tree={keywordTree}
                   onNodeClick={setSelectedTreeNode}
                   selectedNodeId={selectedTreeNode?.id ?? null}
-                  hiddenLeafIds={keywordTreeHiddenLeafIds}
+                  dimmedNodeIds={keywordTreeDimmedIds}
+                  onVisibleNodeIdsChange={onKeywordTreeVisibleIdsChange}
                 />
               ) : (
                 <div className="h-full flex items-center justify-center text-slate-400 text-sm">
@@ -1193,9 +1211,10 @@ export default function CancerTreatmentDashboard({
                   patient={selectedPatient ?? null}
                   keywordTreeFull={keywordTree}
                   selectedNode={selectedTreeNode}
-                  hiddenSubtreeRootIds={keywordTreeHiddenLeafIds}
-                  onToggleNodeVisibility={toggleKeywordTreeNodeVisibility}
-                  onResetAllHidden={resetKeywordTreeAllHidden}
+                  viewportVisibleNodeIds={keywordTreeViewportVisibleIds}
+                  dimmedNodeIds={keywordTreeDimmedIds}
+                  onToggleDimmedKeyword={toggleKeywordTreeDimmed}
+                  onResetDimmedKeywords={resetKeywordTreeDimmed}
                   onClose={() => setSelectedTreeNode(null)}
                 />
               </div>
@@ -1393,7 +1412,8 @@ export default function CancerTreatmentDashboard({
                             tree={keywordTree}
                             onNodeClick={setSelectedTreeNode}
                             selectedNodeId={selectedTreeNode?.id ?? null}
-                            hiddenLeafIds={keywordTreeHiddenLeafIds}
+                            dimmedNodeIds={keywordTreeDimmedIds}
+                            onVisibleNodeIdsChange={onKeywordTreeVisibleIdsChange}
                           />
                         ) : (
                           <div className="h-full flex items-center justify-center text-slate-400 text-sm">
@@ -1407,9 +1427,10 @@ export default function CancerTreatmentDashboard({
                             patient={selectedPatient ?? null}
                             keywordTreeFull={keywordTree}
                             selectedNode={selectedTreeNode}
-                            hiddenSubtreeRootIds={keywordTreeHiddenLeafIds}
-                            onToggleNodeVisibility={toggleKeywordTreeNodeVisibility}
-                            onResetAllHidden={resetKeywordTreeAllHidden}
+                            viewportVisibleNodeIds={keywordTreeViewportVisibleIds}
+                            dimmedNodeIds={keywordTreeDimmedIds}
+                            onToggleDimmedKeyword={toggleKeywordTreeDimmed}
+                            onResetDimmedKeywords={resetKeywordTreeDimmed}
                             onClose={() => setSelectedTreeNode(null)}
                           />
                         </div>
