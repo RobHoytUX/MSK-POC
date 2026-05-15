@@ -26,13 +26,7 @@ import {
   type TreeNode,
 } from "../lib/treeTaxonomy";
 import { buildKeywordTreeForPatient, fetchKeywordTree } from '../lib/api';
-import type { ClinicalTimelineResponse } from "../lib/clinicalIntelligence";
-import {
-  fetchClinicalPatientTimeline,
-  postClinicalChat,
-  resolveClinicalPatientId,
-} from "../lib/clinicalIntelligence";
-import ClinicalTimelineSidebar from "./ClinicalTimelineSidebar";
+import { postClinicalChat, resolveClinicalPatientId } from "../lib/clinicalIntelligence";
 import ComparePatientPanel from './ComparePatientPanel';
 import PatientComparisonView from './PatientComparisonView';
 import TrialQualificationPanel from './TrialQualificationPanel';
@@ -605,9 +599,6 @@ export default function CancerTreatmentDashboard({
   const [isNewsFeedOpen, setIsNewsFeedOpen] = useState(false);
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [chatInput, setChatInput] = useState("");
-  const [clinicalTimelineData, setClinicalTimelineData] = useState<ClinicalTimelineResponse | null>(null);
-  const [clinicalTimelineLoading, setClinicalTimelineLoading] = useState(false);
-  const [clinicalTimelineError, setClinicalTimelineError] = useState<string | null>(null);
   const [clinicalChatPending, setClinicalChatPending] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
@@ -725,12 +716,6 @@ export default function CancerTreatmentDashboard({
     return selectedPatient ?? null;
   }, [trialDiscoverySidebarOpen, trialKeywordCanvasPatient, selectedPatient]);
 
-  const clinicalNumericPatientId = useMemo(() => {
-    const pid = timelinePatientForData?.id;
-    if (!pid) return null;
-    return resolveClinicalPatientId(pid);
-  }, [timelinePatientForData?.id]);
-
   const discoveryTimelineData = useMemo(() => {
     if (timelinePatientForData) {
       return getDiscoveryTimelineForPatient(timelinePatientForData);
@@ -745,31 +730,6 @@ export default function CancerTreatmentDashboard({
     setTrialKeywordAnalysis(null);
     setTrialDiscoverySidebarOpen(true);
   }, [selectedPatient]);
-
-  useEffect(() => {
-    const id = clinicalNumericPatientId;
-    if (activeView !== "timeline" || discoveryTab !== "timeline" || id == null) {
-      setClinicalTimelineData(null);
-      setClinicalTimelineLoading(false);
-      setClinicalTimelineError(null);
-      return;
-    }
-    const ac = new AbortController();
-    setClinicalTimelineLoading(true);
-    setClinicalTimelineError(null);
-    fetchClinicalPatientTimeline(id, ac.signal)
-      .then(setClinicalTimelineData)
-      .catch((err: unknown) => {
-        if ((err as { name?: string })?.name === "AbortError") return;
-        setClinicalTimelineData(null);
-        setClinicalTimelineError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => setClinicalTimelineLoading(false));
-    return () => ac.abort();
-  }, [activeView, discoveryTab, clinicalNumericPatientId]);
-
-  const showClinicalIntelSidebar =
-    activeView === "timeline" && discoveryTab === "timeline" && clinicalNumericPatientId != null;
 
   const trialQualifiedPatientsList = useMemo(
     () => patients.filter((p) => trialQualifiedPatientIds.includes(p.id)),
@@ -1483,13 +1443,6 @@ export default function CancerTreatmentDashboard({
                     : "flex-col"
                 }`}
               >
-              {showClinicalIntelSidebar && (
-                <ClinicalTimelineSidebar
-                  data={clinicalTimelineData}
-                  loading={clinicalTimelineLoading}
-                  error={clinicalTimelineError}
-                />
-              )}
               <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-white">
                 <div className="shrink-0 px-5 py-4 lg:px-8">
                   <div className="flex items-center justify-between gap-4">
