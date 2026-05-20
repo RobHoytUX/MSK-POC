@@ -20,6 +20,7 @@ import {
 } from './keywords-wave';
 import KeywordTree from './KeywordTree';
 import KeywordTreePubmedPanel from './KeywordTreePubmedPanel';
+import KeywordTreeDiscoveryChat from './KeywordTreeDiscoveryChat';
 import {
   findTreeNodeById,
   type TreeNode,
@@ -631,6 +632,8 @@ export default function CancerTreatmentDashboard({
   const [keywordTreeDimmedIds, setKeywordTreeDimmedIds] = useState<Set<string>>(() => new Set());
   /** `null` until first viewport sample — keyword panel lists the full taxonomy until measurement runs. */
   const [keywordTreeViewportVisibleIds, setKeywordTreeViewportVisibleIds] = useState<Set<string> | null>(null);
+  const [keywordTreeHoveredNode, setKeywordTreeHoveredNode] = useState<TreeNode | null>(null);
+  const [keywordTreeInteractionIdleTick, setKeywordTreeInteractionIdleTick] = useState(0);
 
   const onKeywordTreeVisibleIdsChange = useCallback((ids: Set<string>) => {
     setKeywordTreeViewportVisibleIds((prev) => {
@@ -645,6 +648,30 @@ export default function CancerTreatmentDashboard({
         if (same) return prev;
       }
       return new Set(ids);
+    });
+  }, []);
+
+  const onKeywordTreeHover = useCallback((node: TreeNode | null) => {
+    setKeywordTreeHoveredNode(node);
+  }, []);
+
+  const onKeywordTreeInteractionIdle = useCallback((visibleIds: Set<string>) => {
+    setKeywordTreeViewportVisibleIds((prev) => {
+      if (prev !== null && prev.size === visibleIds.size) {
+        let same = true;
+        for (const id of prev) {
+          if (!visibleIds.has(id)) {
+            same = false;
+            break;
+          }
+        }
+        if (same) {
+          setKeywordTreeInteractionIdleTick((t) => t + 1);
+          return prev;
+        }
+      }
+      setKeywordTreeInteractionIdleTick((t) => t + 1);
+      return new Set(visibleIds);
     });
   }, []);
 
@@ -676,6 +703,8 @@ export default function CancerTreatmentDashboard({
   useEffect(() => {
     setKeywordTreeDimmedIds(new Set());
     setKeywordTreeViewportVisibleIds(null);
+    setKeywordTreeHoveredNode(null);
+    setKeywordTreeInteractionIdleTick(0);
   }, [selectedPatient?.id, keywordTree]);
 
   useEffect(() => {
@@ -1190,23 +1219,41 @@ export default function CancerTreatmentDashboard({
       <div className="flex-1 flex flex-col overflow-hidden">
         {showKeywordsTree ? (
           <div className="flex-1 min-h-0 flex">
-            <div className="flex-1 min-w-0 bg-slate-50 min-h-0">
+            <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+              <div className="flex-1 min-w-0 bg-slate-50 min-h-0">
+                {keywordTree ? (
+                  <KeywordTree
+                    tree={keywordTree}
+                    onNodeClick={setSelectedTreeNode}
+                    selectedNodeId={selectedTreeNode?.id ?? null}
+                    hoveredNodeId={keywordTreeHoveredNode?.id ?? null}
+                    onNodeHover={onKeywordTreeHover}
+                    onInteractionIdle={onKeywordTreeInteractionIdle}
+                    dimmedNodeIds={keywordTreeDimmedIds}
+                    onVisibleNodeIdsChange={onKeywordTreeVisibleIdsChange}
+                    className="w-full h-full min-h-0"
+                  />
+                ) : (
+                  <div className="h-full flex items-center justify-center text-slate-400 text-sm">
+                    {keywordTreeError ? `Loading taxonomy (${keywordTreeError})…` : 'Loading keyword tree…'}
+                  </div>
+                )}
+              </div>
               {keywordTree ? (
-                <KeywordTree
-                  tree={keywordTree}
-                  onNodeClick={setSelectedTreeNode}
-                  selectedNodeId={selectedTreeNode?.id ?? null}
-                  dimmedNodeIds={keywordTreeDimmedIds}
-                  onVisibleNodeIdsChange={onKeywordTreeVisibleIdsChange}
-                />
-              ) : (
-                <div className="h-full flex items-center justify-center text-slate-400 text-sm">
-                  {keywordTreeError ? `Loading taxonomy (${keywordTreeError})…` : 'Loading keyword tree…'}
+                <div className="shrink-0 h-[min(510px,65vh)] min-h-[370px] border-t border-slate-200 bg-white">
+                  <KeywordTreeDiscoveryChat
+                    tree={keywordTree}
+                    patientId={selectedPatient?.id ?? null}
+                    patientName={selectedPatient?.name ?? null}
+                    hoveredNode={keywordTreeHoveredNode}
+                    viewportVisibleIds={keywordTreeViewportVisibleIds}
+                    interactionIdleTick={keywordTreeInteractionIdleTick}
+                  />
                 </div>
-              )}
+              ) : null}
             </div>
             {keywordTree ? (
-              <div className="w-[min(480px,40vw)] shrink-0 max-h-full min-h-0 flex flex-col">
+              <div className="w-[min(580px,40vw)] shrink-0 max-h-full min-h-0 flex flex-col border-l border-slate-200">
                 <KeywordTreePubmedPanel
                   patient={selectedPatient ?? null}
                   keywordTreeFull={keywordTree}
@@ -1406,23 +1453,41 @@ export default function CancerTreatmentDashboard({
                     </>
                   ) : (
                     <div className="flex-1 min-h-0 flex min-w-0">
-                      <div className="flex-1 min-w-0 bg-slate-50 min-h-0">
+                      <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+                        <div className="flex-1 min-w-0 bg-slate-50 min-h-0">
+                          {keywordTree ? (
+                            <KeywordTree
+                              tree={keywordTree}
+                              onNodeClick={setSelectedTreeNode}
+                              selectedNodeId={selectedTreeNode?.id ?? null}
+                              hoveredNodeId={keywordTreeHoveredNode?.id ?? null}
+                              onNodeHover={onKeywordTreeHover}
+                              onInteractionIdle={onKeywordTreeInteractionIdle}
+                              dimmedNodeIds={keywordTreeDimmedIds}
+                              onVisibleNodeIdsChange={onKeywordTreeVisibleIdsChange}
+                              className="w-full h-full min-h-0"
+                            />
+                          ) : (
+                            <div className="h-full flex items-center justify-center text-slate-400 text-sm">
+                              {keywordTreeError ? `Loading taxonomy (${keywordTreeError})…` : 'Loading keyword tree…'}
+                            </div>
+                          )}
+                        </div>
                         {keywordTree ? (
-                          <KeywordTree
-                            tree={keywordTree}
-                            onNodeClick={setSelectedTreeNode}
-                            selectedNodeId={selectedTreeNode?.id ?? null}
-                            dimmedNodeIds={keywordTreeDimmedIds}
-                            onVisibleNodeIdsChange={onKeywordTreeVisibleIdsChange}
-                          />
-                        ) : (
-                          <div className="h-full flex items-center justify-center text-slate-400 text-sm">
-                            {keywordTreeError ? `Loading taxonomy (${keywordTreeError})…` : 'Loading keyword tree…'}
+                          <div className="shrink-0 h-[min(510px,65vh)] min-h-[370px] border-t border-slate-200 bg-white">
+                            <KeywordTreeDiscoveryChat
+                              tree={keywordTree}
+                              patientId={selectedPatient?.id ?? null}
+                              patientName={selectedPatient?.name ?? null}
+                              hoveredNode={keywordTreeHoveredNode}
+                              viewportVisibleIds={keywordTreeViewportVisibleIds}
+                              interactionIdleTick={keywordTreeInteractionIdleTick}
+                            />
                           </div>
-                        )}
+                        ) : null}
                       </div>
                       {keywordTree ? (
-                        <div className="w-[min(480px,40vw)] shrink-0 max-h-full min-h-0 flex flex-col">
+                        <div className="w-[min(580px,40vw)] shrink-0 max-h-full min-h-0 flex flex-col border-l border-slate-200">
                           <KeywordTreePubmedPanel
                             patient={selectedPatient ?? null}
                             keywordTreeFull={keywordTree}

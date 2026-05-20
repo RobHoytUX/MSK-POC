@@ -21,6 +21,10 @@ interface KeywordTreeProps {
   tree: TreeNode
   onNodeClick: (node: TreeNode) => void
   selectedNodeId?: string | null
+  hoveredNodeId?: string | null
+  onNodeHover?: (node: TreeNode | null) => void
+  /** Fires after pan/zoom/pointer motion settles — use for viewport overview in chat. */
+  onInteractionIdle?: (visibleIds: Set<string>) => void
   /** Strike / grey styling when the chip is toggled off visually (does not remove nodes). */
   dimmedNodeIds?: ReadonlySet<string>
   /** After zoom / pan / layout, ids of taxonomy nodes whose graphics intersect the viewport. */
@@ -64,10 +68,17 @@ function toRawDatum(node: TreeNode): RawNodeDatum {
   }
 }
 
+const HOVER_SHOW_MS = 250
+const HOVER_HIDE_MS = 150
+const INTERACTION_IDLE_MS = 650
+
 export default function KeywordTree({
   tree,
   onNodeClick,
   selectedNodeId,
+  hoveredNodeId,
+  onNodeHover,
+  onInteractionIdle,
   dimmedNodeIds,
   onVisibleNodeIdsChange,
   className,
@@ -76,6 +87,9 @@ export default function KeywordTree({
   const [translate, setTranslate] = useState<{ x: number; y: number }>({ x: 80, y: 300 })
   const rafRef = useRef<number | undefined>(undefined)
   const lastEmittedSigRef = useRef('')
+  const lastVisibleRef = useRef<Set<string>>(new Set())
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const idleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const nodeIndex = useMemo(() => {
     const map = new Map<string, TreeNode>()
@@ -89,15 +103,26 @@ export default function KeywordTree({
 
   const data = useMemo<RawNodeDatum>(() => toRawDatum(tree), [tree])
 
+  const scheduleInteractionIdle = useCallback(() => {
+    if (!onInteractionIdle) return
+    if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current)
+    idleTimeoutRef.current = setTimeout(() => {
+      idleTimeoutRef.current = null
+      onInteractionIdle(new Set(lastVisibleRef.current))
+    }, INTERACTION_IDLE_MS)
+  }, [onInteractionIdle])
+
   const notifyVisibleIds = useCallback(
     (visible: Set<string>) => {
+      lastVisibleRef.current = new Set(visible)
+      scheduleInteractionIdle()
       if (!onVisibleNodeIdsChange) return
       const sig = [...visible].sort().join('\x1e')
       if (sig === lastEmittedSigRef.current) return
       lastEmittedSigRef.current = sig
       onVisibleNodeIdsChange(new Set(visible))
     },
-    [onVisibleNodeIdsChange],
+    [onVisibleNodeIdsChange, scheduleInteractionIdle],
   )
 
   const measureViewportNodes = useCallback(() => {
@@ -157,6 +182,34 @@ export default function KeywordTree({
     return () => ro.disconnect()
   }, [scheduleMeasure, onVisibleNodeIdsChange])
 
+  useEffect(() => {
+    const root = containerRef.current
+    if (!root || !onInteractionIdle) return
+    const onPointerMove = () => scheduleInteractionIdle()
+    root.addEventListener('pointermove', onPointerMove, { passive: true })
+    return () => root.removeEventListener('pointermove', onPointerMove)
+  }, [onInteractionIdle, scheduleInteractionIdle])
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+      if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current)
+    }
+  }, [])
+
+  const emitHover = useCallback(
+    (node: TreeNode | null) => {
+      if (!onNodeHover) return
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+      if (node) {
+        hoverTimeoutRef.current = setTimeout(() => onNodeHover(node), HOVER_SHOW_MS)
+      } else {
+        hoverTimeoutRef.current = setTimeout(() => onNodeHover(null), HOVER_HIDE_MS)
+      }
+    },
+    [onNodeHover],
+  )
+
   const handleTreeUpdate = useCallback(() => {
     scheduleMeasure()
   }, [scheduleMeasure])
@@ -170,6 +223,7 @@ export default function KeywordTree({
       const dimmed = dimmedNodeIds?.has(sourceId) ?? false
       const strokeFill = dimmed ? DIMMED_ADJUST[type] : { fill: base.fill, stroke: base.stroke }
       const isSelected = selectedNodeId === sourceId
+      const isHovered = hoveredNodeId === sourceId
 
       const handleClick = (e: React.MouseEvent) => {
         e.stopPropagation()
@@ -178,17 +232,28 @@ export default function KeywordTree({
         if (src) onNodeClick(src)
       }
 
+      const handleMouseEnter = () => {
+        const src = nodeIndex.get(sourceId)
+        if (src) emitHover(src)
+      }
+
+      const handleMouseLeave = () => {
+        emitHover(null)
+      }
+
       return (
         <g
           data-keyword-tree-node-id={sourceId}
           onClick={handleClick}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
           style={{ cursor: 'pointer', opacity: dimmed ? 0.52 : 1 }}
         >
           <circle
             r={base.r}
             fill={strokeFill.fill}
-            stroke={isSelected ? '#0f172a' : strokeFill.stroke}
-            strokeWidth={isSelected ? 3 : 1.5}
+            stroke={isSelected ? '#0f172a' : isHovered ? '#6366f1' : strokeFill.stroke}
+            strokeWidth={isSelected ? 3 : isHovered ? 2.5 : 1.5}
           />
           <text
             x={base.r + 8}
@@ -210,7 +275,7 @@ export default function KeywordTree({
         </g>
       )
     },
-    [dimmedNodeIds, nodeIndex, onNodeClick, selectedNodeId],
+    [dimmedNodeIds, emitHover, hoveredNodeId, nodeIndex, onNodeClick, selectedNodeId],
   )
 
   return (

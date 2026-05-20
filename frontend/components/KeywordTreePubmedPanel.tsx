@@ -94,7 +94,7 @@ export default function KeywordTreePubmedPanel({
           <button
             type="button"
             onClick={onClose}
-            className="text-xs font-medium text-slate-600 hover:text-slate-900"
+            className="text-[14px] font-medium text-slate-600 hover:text-slate-900"
           >
             Clear selection
           </button>
@@ -105,24 +105,24 @@ export default function KeywordTreePubmedPanel({
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-semibold text-sm">
+                <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-semibold text-[16px]">
                   {patient.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
                 </div>
                 <div>
-                  <p className="font-semibold text-slate-900">{patient.name}</p>
-                  <p className="text-xs text-slate-500">
+                  <p className="font-semibold text-[18px] text-slate-900">{patient.name}</p>
+                  <p className="text-[14px] text-slate-500">
                     {patient.age}yo {patient.gender} · MRN {patient.mrn}
                   </p>
                 </div>
               </div>
               {patient.diagnoses.length > 0 && (
-                <p className="text-xs text-slate-600 mt-2">{patient.diagnoses[0]}</p>
+                <p className="text-[14px] text-slate-600 mt-2">{patient.diagnoses[0]}</p>
               )}
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="text-slate-400 hover:text-slate-700 text-xl leading-none"
+              className="text-slate-400 hover:text-slate-700 text-[22px] leading-none"
               aria-label="Clear selection"
             >
               ×
@@ -135,10 +135,10 @@ export default function KeywordTreePubmedPanel({
         <div className="shrink-0 px-5 py-4 border-b border-slate-200 bg-slate-50/70">
           <div className="flex items-start justify-between gap-2 mb-2">
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+              <p className="text-[14px] font-semibold text-slate-700 uppercase tracking-wide">
                 Keywords
               </p>
-              <p className="text-[11px] text-slate-500 mt-0.5">
+              <p className="text-[13px] text-slate-500 mt-0.5">
                 <span className="tabular-nums">{keywordChips.length}</span>{' '}
                 {viewportVisibleNodeIds !== null && viewportVisibleNodeIds !== undefined
                   ? 'visible in view'
@@ -157,7 +157,7 @@ export default function KeywordTreePubmedPanel({
               <button
                 type="button"
                 onClick={() => setChipsExpanded((v) => !v)}
-                className="text-xs font-medium text-slate-600 hover:text-slate-900"
+                className="text-[14px] font-medium text-slate-600 hover:text-slate-900"
                 aria-expanded={chipsExpanded}
               >
                 {chipsExpanded ? 'Hide keywords' : 'Show keywords'}
@@ -166,7 +166,7 @@ export default function KeywordTreePubmedPanel({
                 <button
                   type="button"
                   onClick={onResetDimmedKeywords}
-                  className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
+                  className="text-[14px] font-medium text-indigo-600 hover:text-indigo-800"
                 >
                   Clear greyed
                 </button>
@@ -175,7 +175,7 @@ export default function KeywordTreePubmedPanel({
           </div>
           {chipsExpanded ? (
             <>
-              <p className="text-[11px] text-slate-500 mb-2.5">
+              <p className="text-[13px] text-slate-500 mb-2.5">
                 Chips follow what intersects the tree view as you zoom and pan. Click a chip to grey and strike its
                 label on the tree; click again to restore.
               </p>
@@ -199,13 +199,13 @@ export default function KeywordTreePubmedPanel({
                           ? 'Show this keyword normally on the tree'
                           : 'Grey and strike this keyword on the tree'
                       }
-                      className={`flex max-w-[min(260px,100%)] items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-left text-[11px] font-medium leading-snug transition-all ${
+                      className={`flex max-w-[min(260px,100%)] items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-left text-[13px] font-medium leading-snug transition-all ${
                         dimmedInTree
                           ? 'border-slate-300 bg-slate-100 text-slate-600 opacity-[0.82] grayscale-[0.25] hover:bg-slate-200/70'
                           : 'border-emerald-200 bg-white text-slate-800 shadow-sm ring-1 ring-emerald-100 hover:border-emerald-400 hover:bg-emerald-50/40'
                       }`}
                     >
-                      <span className="shrink-0 tabular-nums rounded bg-slate-200/70 px-1 py-px text-[9px] font-semibold uppercase text-slate-600">
+                      <span className="shrink-0 tabular-nums rounded bg-slate-200/70 px-1 py-px text-[11px] font-semibold uppercase text-slate-600">
                         {abbreviated}
                       </span>
                       <span
@@ -218,7 +218,7 @@ export default function KeywordTreePubmedPanel({
                 })}
               </div>
               {keywordChips.length === 0 && allKeywordChips.length > 0 ? (
-                <p className="text-[11px] text-slate-600 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2 mt-2">
+                <p className="text-[13px] text-slate-600 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2 mt-2">
                   Nothing in the current dendrogram framing overlaps this panel—zoom out or pan so taxonomy nodes enter
                   the tree area.
                 </p>
@@ -231,16 +231,16 @@ export default function KeywordTreePubmedPanel({
       <div className="shrink-0 px-5 py-3 border-b border-slate-100 bg-white">
         {selectedNode ? (
           <>
-            <p className="text-[10px] uppercase tracking-wide text-slate-400">{selectedNode.type}</p>
-            <h3 className="text-base font-semibold text-slate-900 leading-snug">{selectedNode.label}</h3>
+            <p className="text-[12px] uppercase tracking-wide text-slate-400">{selectedNode.type}</p>
+            <h3 className="text-[18px] font-semibold text-slate-900 leading-snug">{selectedNode.label}</h3>
             {selectedNode.taxonomyPath !== 'root' && (
-              <p className="text-[10px] text-slate-400 mt-0.5 font-mono truncate">{selectedNode.taxonomyPath}</p>
+              <p className="text-[12px] text-slate-400 mt-0.5 font-mono truncate">{selectedNode.taxonomyPath}</p>
             )}
           </>
         ) : (
           <>
-            <p className="text-sm font-medium text-slate-700">No node selected</p>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-[16px] font-medium text-slate-700">No node selected</p>
+            <p className="text-[14px] text-slate-500 mt-1">
               Click any circle on the tree for details & PubMed (green leaves).
             </p>
           </>
@@ -249,22 +249,22 @@ export default function KeywordTreePubmedPanel({
 
       <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
         {!selectedNode ? null : !isLeaf ? (
-          <div className="text-sm text-slate-500">
+          <div className="text-[16px] text-slate-500">
             This is a taxonomy category. Select a specific extracted keyword (green leaf) to load PubMed
             literature.
           </div>
         ) : null}
 
         {selectedNode && isLeaf && loading && (
-          <div className="text-sm text-slate-500">Loading PubMed…</div>
+          <div className="text-[16px] text-slate-500">Loading PubMed…</div>
         )}
 
         {selectedNode && isLeaf && !loading && error && (
-          <div className="text-sm text-rose-600">PubMed lookup failed: {error}</div>
+          <div className="text-[16px] text-rose-600">PubMed lookup failed: {error}</div>
         )}
 
         {selectedNode && isLeaf && !loading && !error && papers.length === 0 && (
-          <div className="text-sm text-slate-500">No cached PubMed papers for this keyword yet.</div>
+          <div className="text-[16px] text-slate-500">No cached PubMed papers for this keyword yet.</div>
         )}
 
         {selectedNode && isLeaf && !loading && papers.length > 0 && (
@@ -275,16 +275,16 @@ export default function KeywordTreePubmedPanel({
                   href={paper.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-sm font-semibold text-indigo-700 hover:underline"
+                  className="text-[16px] font-semibold text-indigo-700 hover:underline"
                 >
                   {paper.title}
                 </a>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-[14px] text-slate-500 mt-0.5">
                   {paper.journal}
                   {paper.year ? ` · ${paper.year}` : ''}
                 </p>
                 {paper.abstract && (
-                  <p className="text-xs text-slate-600 mt-2 line-clamp-4">{paper.abstract}</p>
+                  <p className="text-[14px] text-slate-600 mt-2 line-clamp-4">{paper.abstract}</p>
                 )}
               </li>
             ))}
