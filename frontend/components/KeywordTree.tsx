@@ -258,7 +258,7 @@ export default function KeywordTree({
           <text
             x={base.r + 8}
             y={4}
-            fontSize={type === 'patient' ? 16 : type === 'branch' ? 14 : 12}
+            fontSize={type === 'patient' ? 17.5 : type === 'branch' ? 15.5 : 13.5}
             fontWeight={base.textWeight}
             fill={dimmed ? '#94a3b8' : '#0f172a'}
             style={{

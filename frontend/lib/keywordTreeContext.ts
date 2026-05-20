@@ -97,45 +97,61 @@ function formatAncestry(ancestors: TreeNode[]): string {
   return ancestors.map((a) => a.label).join(' → ')
 }
 
+export type OverviewBlock =
+  | { type: 'paragraph'; text: string }
+  | { type: 'badges'; label: string; items: string[] }
+  | { type: 'category'; label: string; items: string[]; hint?: string }
+
+export interface KeywordOverview {
+  blocks: OverviewBlock[]
+}
+
 /** Narrative overview when the pointer rests on a single node. */
-export function buildHoverOverview(root: TreeNode, node: TreeNode): string {
+export function buildHoverOverview(root: TreeNode, node: TreeNode): KeywordOverview {
   const ancestors = getNodeAncestry(root, node.id)
   const ancestryText = formatAncestry(ancestors)
   const hint = subcategoryHint(node.taxonomyPath)
   const typeLabel = TYPE_LABEL[node.type]
 
-  const parts: string[] = [
-    `You're looking at **${node.label}** (${typeLabel.toLowerCase()}).`,
-    `It sits under ${ancestryText}.`,
+  const blocks: OverviewBlock[] = [
+    {
+      type: 'paragraph',
+      text: `You're looking at **${node.label}** (${typeLabel.toLowerCase()}).`,
+    },
+    { type: 'paragraph', text: `It sits under ${ancestryText}.` },
   ]
 
-  if (hint) parts.push(hint)
+  if (hint) blocks.push({ type: 'paragraph', text: hint })
 
   if (node.type === 'leaf') {
     const siblings = getSiblingLeaves(root, node)
     if (siblings.length > 0) {
-      parts.push(
-        `Related keywords in the same subcategory: ${siblings.map((s) => s.label).join(', ')}.`,
-      )
+      blocks.push({
+        type: 'badges',
+        label: 'Related keywords in the same subcategory',
+        items: siblings.map((s) => s.label),
+      })
     }
     if (node.pubmedAvailable !== false) {
-      parts.push('Click this leaf to load cached PubMed literature in the panel above.')
+      blocks.push({
+        type: 'paragraph',
+        text: 'Click this leaf to load cached PubMed literature in the panel above.',
+      })
     }
   } else {
     const leaves = collectLeafDescendants(node)
     if (leaves.length > 0) {
-      parts.push(
-        `This branch contains ${leaves.length} extracted keyword${leaves.length === 1 ? '' : 's'}: ${leaves
-          .slice(0, 6)
-          .map((l) => l.label)
-          .join(', ')}${leaves.length > 6 ? ', …' : ''}.`,
-      )
+      blocks.push({
+        type: 'badges',
+        label: `Extracted keywords in this branch (${leaves.length})`,
+        items: leaves.map((l) => l.label),
+      })
     } else {
-      parts.push('No patient-specific keywords are attached here yet.')
+      blocks.push({ type: 'paragraph', text: 'No patient-specific keywords are attached here yet.' })
     }
   }
 
-  return parts.join('\n\n')
+  return { blocks }
 }
 
 interface ViewportGroup {
@@ -198,9 +214,16 @@ function groupVisibleNodes(root: TreeNode, visibleIds: ReadonlySet<string>): Vie
 }
 
 /** Overview of everything currently framed in the tree viewport. */
-export function buildViewportOverview(root: TreeNode, visibleIds: ReadonlySet<string>): string {
+export function buildViewportOverview(root: TreeNode, visibleIds: ReadonlySet<string>): KeywordOverview {
   if (visibleIds.size === 0) {
-    return 'Pan or zoom the tree so taxonomy nodes enter the view — I will summarize what is on screen.'
+    return {
+      blocks: [
+        {
+          type: 'paragraph',
+          text: 'Pan or zoom the tree so taxonomy nodes enter the view — I will summarize what is on screen.',
+        },
+      ],
+    }
   }
 
   const visibleLeaves = collectLeafDescendants(root).filter((l) => visibleIds.has(l.id))
@@ -208,27 +231,39 @@ export function buildViewportOverview(root: TreeNode, visibleIds: ReadonlySet<st
     .map((id) => findTreeNodeById(root, id))
     .filter((n): n is TreeNode => n !== null && n.type !== 'leaf' && n.type !== 'patient')
 
-  const parts: string[] = []
+  const blocks: OverviewBlock[] = []
 
   if (visibleLeaves.length === 0 && visibleScaffold.length === 0) {
-    parts.push('The current view shows part of the taxonomy structure without extracted keywords in frame.')
+    blocks.push({
+      type: 'paragraph',
+      text: 'The current view shows part of the taxonomy structure without extracted keywords in frame.',
+    })
   } else {
-    parts.push(
-      `In your current view I see **${visibleLeaves.length} keyword${visibleLeaves.length === 1 ? '' : 's'}** and **${visibleScaffold.length} taxonomy node${visibleScaffold.length === 1 ? '' : 's'}**.`,
-    )
+    blocks.push({
+      type: 'paragraph',
+      text: `In your current view I see **${visibleLeaves.length} keyword${visibleLeaves.length === 1 ? '' : 's'}** and **${visibleScaffold.length} taxonomy node${visibleScaffold.length === 1 ? '' : 's'}**.`,
+    })
   }
 
   const groups = groupVisibleNodes(root, visibleIds)
   for (const g of groups) {
-    parts.push(`\n**${g.branch}**`)
+    blocks.push({ type: 'paragraph', text: `**${g.branch}**` })
     for (const cat of g.categories) {
       const hint = cat.scaffold.map((s) => subcategoryHint(s.taxonomyPath)).find(Boolean)
       if (cat.leaves.length > 0) {
-        parts.push(`_${cat.label}_ — ${cat.leaves.map((l) => l.label).join(', ')}`)
+        blocks.push({
+          type: 'category',
+          label: cat.label,
+          items: cat.leaves.map((l) => l.label),
+          hint: hint ?? undefined,
+        })
       } else if (cat.scaffold.length > 0) {
-        parts.push(`_${cat.label}_ — ${cat.scaffold.map((s) => s.label).join(', ')} (structure only)`)
+        blocks.push({
+          type: 'category',
+          label: `${cat.label} (structure only)`,
+          items: cat.scaffold.map((s) => s.label),
+        })
       }
-      if (hint && cat.leaves.length > 0) parts.push(hint)
     }
   }
 
@@ -241,21 +276,21 @@ export function buildViewportOverview(root: TreeNode, visibleIds: ReadonlySet<st
       byParent.set(p, list)
     }
     const clusters = [...byParent.values()].filter((v) => v.length >= 2)
-    if (clusters.length > 0) {
-      parts.push(
-        '\n**Relationships in view:** ' +
-          clusters
-            .map((cluster) => cluster.map((l) => l.label).join(' ↔ '))
-            .slice(0, 4)
-            .join('; ') +
-          '.',
-      )
+    for (const cluster of clusters.slice(0, 4)) {
+      blocks.push({
+        type: 'badges',
+        label: 'Related in view',
+        items: cluster.map((l) => l.label),
+      })
     }
   }
 
   if (visibleLeaves.length > 0) {
-    parts.push('\nHover a specific node for a focused breakdown, or click a green leaf for PubMed.')
+    blocks.push({
+      type: 'paragraph',
+      text: 'Hover a specific node for a focused breakdown, or click a green leaf for PubMed.',
+    })
   }
 
-  return parts.join('\n')
+  return { blocks }
 }

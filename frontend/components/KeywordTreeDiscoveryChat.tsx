@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowUp, Layers2, Stethoscope } from 'lucide-react'
 import type { TreeNode } from '../lib/treeTaxonomy'
-import { buildHoverOverview, buildViewportOverview } from '../lib/keywordTreeContext'
+import {
+  buildHoverOverview,
+  buildViewportOverview,
+  type KeywordOverview,
+} from '../lib/keywordTreeContext'
 import { postClinicalChat, resolveClinicalPatientId } from '../lib/clinicalIntelligence'
 
 type MessageSource = 'welcome' | 'hover' | 'viewport' | 'user' | 'assistant'
@@ -11,6 +15,7 @@ interface ChatMessage {
   role: 'user' | 'assistant'
   source: MessageSource
   content: string
+  overview?: KeywordOverview
 }
 
 interface Props {
@@ -35,6 +40,52 @@ function renderInlineMarkdown(text: string) {
       )
     }
     return part
+  })
+}
+
+function KeywordBadge({ label }: { label: string }) {
+  return (
+    <span className="inline-flex max-w-[min(280px,100%)] items-center gap-1.5 rounded-full border border-emerald-200 bg-white px-2.5 py-1.5 text-[13px] font-medium leading-snug text-slate-800 shadow-sm ring-1 ring-emerald-100">
+      <span className="shrink-0 rounded bg-slate-200/70 px-1 py-px text-[11px] font-semibold uppercase text-slate-600">
+        Kw
+      </span>
+      <span className="min-w-0">{label}</span>
+    </span>
+  )
+}
+
+function renderOverview(overview: KeywordOverview) {
+  return overview.blocks.map((block, i) => {
+    if (block.type === 'paragraph') {
+      return (
+        <p key={i} className={i > 0 ? 'mt-2' : ''}>
+          {renderInlineMarkdown(block.text)}
+        </p>
+      )
+    }
+    if (block.type === 'badges') {
+      return (
+        <div key={i} className={i > 0 ? 'mt-2' : ''}>
+          <p className="text-[14px] font-semibold text-slate-800 mb-1.5">{block.label}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {block.items.map((item, idx) => (
+              <KeywordBadge key={`${item}-${idx}`} label={item} />
+            ))}
+          </div>
+        </div>
+      )
+    }
+    return (
+      <div key={i} className={i > 0 ? 'mt-2' : ''}>
+        <p className="text-[14px] font-medium text-slate-700 italic mb-1">{block.label}</p>
+        {block.hint ? <p className="text-[13px] text-slate-500 mb-1.5">{block.hint}</p> : null}
+        <div className="flex flex-wrap gap-1.5">
+          {block.items.map((item, idx) => (
+            <KeywordBadge key={`${item}-${idx}`} label={item} />
+          ))}
+        </div>
+      </div>
+    )
   })
 }
 
@@ -124,12 +175,12 @@ export default function KeywordTreeDiscoveryChat({
     el.scrollTo({ top: el.scrollHeight, behavior })
   }, [])
 
-  const upsertAutoMessage = useCallback((source: 'hover' | 'viewport', content: string) => {
+  const upsertAutoMessage = useCallback((source: 'hover' | 'viewport', overview: KeywordOverview) => {
     setMessages((prev) => {
       const withoutSame = prev.filter((m) => m.source !== source)
       return [
         ...withoutSame,
-        { id: nextId(), role: 'assistant', source, content },
+        { id: nextId(), role: 'assistant', source, content: '', overview },
       ]
     })
   }, [])
@@ -243,7 +294,11 @@ export default function KeywordTreeDiscoveryChat({
                       : 'bg-gray-100 text-gray-900'
               }`}
             >
-              {msg.role === 'assistant' ? renderMessageBody(msg.content) : msg.content}
+              {msg.role === 'assistant'
+                ? msg.overview
+                  ? renderOverview(msg.overview)
+                  : renderMessageBody(msg.content)
+                : msg.content}
             </div>
             {msg.role === 'user' ? <UserAvatar /> : null}
           </div>
