@@ -1,7 +1,9 @@
 """NeuroNode FastAPI backend — keyword graph, PubMed cache, and research trail."""
 
+import json
 import os
 import urllib.parse
+import urllib.request
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -18,6 +20,9 @@ load_dotenv()
 DATABASE_URL = os.environ["DATABASE_URL"]
 DYNAMODB_TABLE = os.environ.get("DYNAMODB_TABLE", "neuronode_pubmed_cache")
 AWS_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-2")
+CLINICAL_INTELLIGENCE_URL = os.environ.get(
+    "CLINICAL_INTELLIGENCE_URL", "http://18.191.159.27:8000"
+).rstrip("/")
 
 _db_conn: pg8000.dbapi.Connection | None = None
 
@@ -76,6 +81,10 @@ class TrailItem(BaseModel):
     node_label: str
     created_at: str
 
+class ClinicalChatRequest(BaseModel):
+    patient_id: int
+    user_query: str
+
 
 def _parse_db_url(url: str) -> dict[str, Any]:
     p = urllib.parse.urlparse(url)
@@ -131,6 +140,27 @@ app.add_middleware(
 def _rows_as_dicts(cursor: Any) -> list[dict[str, Any]]:
     cols = [d[0] for d in cursor.description]
     return [dict(zip(cols, row)) for row in cursor.fetchall()]
+
+
+def _proxy_clinical_intelligence(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
+    """Forward requests to Clinical Intelligence (HTTP-only service unreachable from HTTPS browsers)."""
+    url = f"{CLINICAL_INTELLIGENCE_URL}{path}"
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json"} if data is not None else {},
+        method=method,
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            raw = resp.read()
+            return json.loads(raw) if raw else {}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Clinical Intelligence unavailable: {exc}",
+        ) from exc
 
 
 # --- keyword tree ---
@@ -272,6 +302,19 @@ def get_trail(patient_id: str, node_id: str | None = None):
         {**r, "id": str(r["id"]), "created_at": r["created_at"].isoformat()}
         for r in rows
     ]
+
+
+@app.post("/api/clinical/chat", operation_id="postClinicalChatProxy")
+def clinical_chat_proxy(body: ClinicalChatRequest):
+    return _proxy_clinical_intelligence("POST", "/chat", body.model_dump())
+
+
+@app.get(
+    "/api/clinical/patient/{patient_id}/timeline",
+    operation_id="getClinicalPatientTimelineProxy",
+)
+def clinical_timeline_proxy(patient_id: int):
+    return _proxy_clinical_intelligence("GET", f"/patient/{patient_id}/timeline")
 
 
 # Lambda handler

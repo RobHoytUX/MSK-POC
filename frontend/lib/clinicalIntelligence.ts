@@ -4,7 +4,12 @@
 
 const DEFAULT_CI_BASE = "http://18.191.159.27:8000";
 
+/** In production, route through the HTTPS NeuroNode API proxy to avoid mixed-content blocks. */
 export function getClinicalIntelligenceBaseUrl(): string {
+  const apiUrl = (import.meta.env.VITE_API_URL ?? "").trim().replace(/\/$/, "");
+  if (import.meta.env.PROD && apiUrl && /^https:\/\//i.test(apiUrl)) {
+    return `${apiUrl}/api/clinical`;
+  }
   const fromEnv = import.meta.env.VITE_CLINICAL_INTELLIGENCE_URL;
   return (typeof fromEnv === "string" && fromEnv.trim().length > 0 ? fromEnv : DEFAULT_CI_BASE).replace(
     /\/$/,
