@@ -20,6 +20,8 @@ function AppContent() {
   const [onboardingPhase, setOnboardingPhase] = useState<OnboardingPhase>("patients");
   const [cohortPatientIds, setCohortPatientIds] = useState<string[]>([]);
   const [trialQualifiedPatientIds, setTrialQualifiedPatientIds] = useState<string[]>([]);
+  const [isPatientSelectorOpen, setIsPatientSelectorOpen] = useState(false);
+  const [isPatientSelectorVisible, setIsPatientSelectorVisible] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -52,6 +54,16 @@ function AppContent() {
     if (!firstId) return null;
     return patients.find((p) => p.id === firstId) ?? null;
   }, [cohortPatientIds]);
+
+  const openPatientSelectorPanel = () => {
+    setIsPatientSelectorOpen(true);
+    window.setTimeout(() => setIsPatientSelectorVisible(true), 10);
+  };
+
+  const closePatientSelectorPanel = () => {
+    setIsPatientSelectorVisible(false);
+    window.setTimeout(() => setIsPatientSelectorOpen(false), 300);
+  };
 
   if (loading || !hydrated) {
     const shell: CSSProperties = {
@@ -137,10 +149,40 @@ function AppContent() {
         selectedPatient={selectedPatient ?? undefined}
         cohortPatientIds={cohortPatientIds}
         trialQualifiedPatientIds={trialQualifiedPatientIds}
-        onChangePatient={() => {
-          setOnboardingPhase("patients");
-        }}
+        onChangePatient={openPatientSelectorPanel}
       />
+      {isPatientSelectorOpen ? (
+        <>
+          <button
+            type="button"
+            aria-label="Close patient selector"
+            className={`fixed inset-0 z-40 bg-black/30 transition-opacity duration-300 ${
+              isPatientSelectorVisible ? "opacity-100" : "opacity-0"
+            }`}
+            onClick={closePatientSelectorPanel}
+          />
+          <aside
+            className={`fixed right-0 top-0 z-50 h-full w-[min(920px,calc(100vw-32px))] border-l border-black/10 bg-white shadow-[-24px_0_64px_rgba(15,23,42,0.18)] transition-transform duration-300 ease-out ${
+              isPatientSelectorVisible ? "translate-x-0" : "translate-x-full"
+            }`}
+          >
+            <PatientSelectPage
+              mode="panel"
+              initialSelectedPatientIds={cohortPatientIds}
+              onCancel={closePatientSelectorPanel}
+              onContinue={(ids) => {
+                setCohortPatientIds(ids);
+                if (ids.length === 1) {
+                  setTrialQualifiedPatientIds([]);
+                } else {
+                  setTrialQualifiedPatientIds((current) => current.filter((id) => ids.includes(id)));
+                }
+                closePatientSelectorPanel();
+              }}
+            />
+          </aside>
+        </>
+      ) : null}
     </div>
   );
 }

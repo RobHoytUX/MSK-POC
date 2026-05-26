@@ -1,4 +1,4 @@
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 
 interface QuantumPanelProps {
   isOpen: boolean;
@@ -6,26 +6,27 @@ interface QuantumPanelProps {
 }
 
 export function QuantumPanel({ isOpen, onClose }: QuantumPanelProps) {
-  if (!isOpen) return null;
-
   return (
-    <>
-      {/* Backdrop */}
+    <AnimatePresence>
+      {isOpen ? (
+        <>
+      {/* Click catcher without dimming or blurring the page */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
+        transition={{ duration: 0.12 }}
+        className="fixed inset-0 z-40 bg-transparent"
         onClick={onClose}
       />
       
       {/* Panel */}
       <motion.div
-        initial={{ x: -500, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        exit={{ x: -500, opacity: 0 }}
-        transition={{ type: "spring", damping: 25, stiffness: 200 }}
-        className="fixed top-0 left-0 w-[500px] h-full bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 shadow-2xl overflow-hidden z-50"
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+        className="fixed right-0 top-0 z-50 h-full w-[min(560px,calc(100vw-32px))] overflow-hidden border-l border-purple-500/30 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 shadow-[-24px_0_64px_rgba(15,23,42,0.22)]"
       >
         {/* Header */}
         <div className="relative px-6 py-6 border-b border-purple-500/30 bg-black/20">
@@ -209,6 +210,8 @@ export function QuantumPanel({ isOpen, onClose }: QuantumPanelProps) {
 
         </div>
       </motion.div>
-    </>
+        </>
+      ) : null}
+    </AnimatePresence>
   );
 }

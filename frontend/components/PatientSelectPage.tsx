@@ -3,21 +3,28 @@ import { motion } from 'motion/react';
 import { Search, X, Calendar, Clock, Pill, Stethoscope, Phone, Mail, MapPin, ChevronRight, Users, LogOut, CheckSquare, Square } from 'lucide-react';
 import { patients } from '../lib/patients';
 import { useAuth } from '../lib/AuthContext';
-import mapsLogo from '../src/assets/maps-logo.png';
 
 interface PatientSelectPageProps {
   onContinue: (selectedPatientIds: string[]) => void;
   /** Pre-select patients (e.g. when returning from dashboard to edit cohort). */
   initialSelectedPatientIds?: string[];
+  mode?: 'page' | 'panel';
+  onCancel?: () => void;
 }
 
-export default function PatientSelectPage({ onContinue, initialSelectedPatientIds = [] }: PatientSelectPageProps) {
+export default function PatientSelectPage({
+  onContinue,
+  initialSelectedPatientIds = [],
+  mode = 'page',
+  onCancel,
+}: PatientSelectPageProps) {
   const { profile, signOut } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedPatient, setExpandedPatient] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     () => new Set(initialSelectedPatientIds)
   );
+  const isPanel = mode === 'panel';
 
   const filtered = patients.filter(p => {
     const q = searchQuery.toLowerCase();
@@ -57,33 +64,38 @@ export default function PatientSelectPage({ onContinue, initialSelectedPatientId
   };
 
   return (
-    <div className="h-[100dvh] flex flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-indigo-50/30">
+    <div className={`${isPanel ? 'h-full' : 'h-[100dvh]'} flex flex-col overflow-hidden bg-gradient-to-br from-slate-50 to-indigo-50/30`}>
       {/* Header — fixed height; list scrolls between header and footer */}
       <div className="bg-white border-b border-gray-200 shadow-sm shrink-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 py-5">
+        <div className={`${isPanel ? 'max-w-none' : 'max-w-6xl mx-auto'} px-6 py-5`}>
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-4">
-              <img
-                src={mapsLogo}
-                alt="MAPS logo"
-                className="h-[30px] w-[30px] object-contain shrink-0"
-              />
               <div>
                 <h1 className="text-xl font-semibold text-gray-900">Select patients</h1>
-                <p className="text-sm text-gray-500">Choose one or more patients, then continue to clinical trials</p>
+                <p className="text-[16px] text-gray-500">Choose one or more patients, then continue to clinical trials</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full">
                 <Users className="w-4 h-4 text-gray-500" />
-                <span className="text-sm text-gray-600">{filtered.length} shown</span>
+                <span className="text-[16px] text-gray-600">{filtered.length} shown</span>
               </div>
+              {isPanel && onCancel ? (
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                  aria-label="Close patient selector"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              ) : (
               <div className="flex items-center gap-3">
                 <div className="text-right">
-                  <p className="text-sm font-medium text-gray-900">{profile?.full_name}</p>
-                  <p className="text-xs text-gray-500">{profile?.specialty || 'Physician'}</p>
+                  <p className="text-[16px] font-medium text-gray-900">{profile?.full_name}</p>
+                  <p className="text-[14px] text-gray-500">{profile?.specialty || 'Physician'}</p>
                 </div>
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-sm font-bold">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-[16px] font-bold">
                   {profile?.avatar_initials || 'U'}
                 </div>
                 <button
@@ -94,6 +106,7 @@ export default function PatientSelectPage({ onContinue, initialSelectedPatientId
                   <LogOut className="w-4 h-4" />
                 </button>
               </div>
+              )}
             </div>
           </div>
 
@@ -105,7 +118,7 @@ export default function PatientSelectPage({ onContinue, initialSelectedPatientId
               placeholder="Search by name, MRN, diagnosis, or medication..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+              className="w-full pl-12 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-[16px]"
             />
             {searchQuery && (
               <button
@@ -121,12 +134,12 @@ export default function PatientSelectPage({ onContinue, initialSelectedPatientId
             <button
               type="button"
               onClick={toggleSelectAllFiltered}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-[16px] font-medium text-gray-700 hover:bg-gray-50"
             >
               {allFilteredSelected ? <CheckSquare className="w-4 h-4 text-indigo-600" /> : <Square className="w-4 h-4 text-gray-400" />}
               {allFilteredSelected ? 'Deselect all in view' : 'Select all in view'}
             </button>
-            <p className="text-sm text-gray-600">
+            <p className="text-[16px] text-gray-600">
               <span className="font-semibold text-gray-900">{selectedIds.size}</span> patient{selectedIds.size !== 1 ? 's' : ''} selected
             </p>
           </div>
@@ -135,7 +148,7 @@ export default function PatientSelectPage({ onContinue, initialSelectedPatientId
 
       {/* Patient list — scrolls between header and footer */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="max-w-6xl mx-auto px-6 py-6 pb-4">
+        <div className={`${isPanel ? 'max-w-none' : 'max-w-6xl mx-auto'} px-6 py-6 pb-4`}>
           <div className="grid gap-3">
           {filtered.map((patient, idx) => (
             <motion.div
@@ -147,9 +160,10 @@ export default function PatientSelectPage({ onContinue, initialSelectedPatientId
             >
               {/* Main row */}
               <div
-                className="flex items-center gap-4 px-5 py-4 cursor-pointer group"
+                className="relative flex items-start gap-4 px-5 py-4 pr-24 cursor-pointer group"
                 onClick={() => toggleExpand(patient.id)}
               >
+                <span className="absolute right-5 top-4 text-[14px] text-gray-400">{patient.mrn}</span>
                 <button
                   type="button"
                   role="checkbox"
@@ -168,47 +182,41 @@ export default function PatientSelectPage({ onContinue, initialSelectedPatientId
                   )}
                 </button>
                 {/* Avatar */}
-                <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-indigo-700 text-sm font-bold flex-shrink-0 border border-indigo-200/50">
+                <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-indigo-700 text-[16px] font-bold flex-shrink-0 border border-indigo-200/50">
                   {patient.name.split(' ').map(n => n[0]).join('')}
                 </div>
 
                 {/* Name & basics */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-gray-900 text-sm">{patient.name}</h3>
-                    <span className="text-xs text-gray-400">{patient.mrn}</span>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 text-[16px]">{patient.name}</h3>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      {patient.diagnoses.slice(0, 2).map((d, i) => (
+                        <span key={i} className="px-2 py-0.5 bg-red-50 text-red-700 text-[11px] rounded-full border border-red-100 whitespace-nowrap truncate max-w-[160px]">
+                          {d}
+                        </span>
+                      ))}
+                      {patient.diagnoses.length > 2 && (
+                        <span className="text-[11px] text-gray-400">+{patient.diagnoses.length - 2}</span>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-[14px] text-gray-500 mt-1.5">
                     {patient.age}yo {patient.gender} · Patient for {patient.yearsAsPatient} {patient.yearsAsPatient === 1 ? 'year' : 'years'}
                   </p>
                 </div>
 
-                {/* Diagnoses pills */}
-                <div className="hidden md:flex items-center gap-1.5 flex-shrink-0 max-w-xs">
-                  {patient.diagnoses.slice(0, 2).map((d, i) => (
-                    <span key={i} className="px-2 py-0.5 bg-red-50 text-red-700 text-[11px] rounded-full border border-red-100 whitespace-nowrap truncate max-w-[160px]">
-                      {d}
-                    </span>
-                  ))}
-                  {patient.diagnoses.length > 2 && (
-                    <span className="text-[11px] text-gray-400">+{patient.diagnoses.length - 2}</span>
-                  )}
-                </div>
-
                 {/* Last visit */}
-                <div className="hidden lg:flex items-center gap-1.5 text-xs text-gray-500 flex-shrink-0">
+                <div className="hidden lg:flex items-center gap-1.5 pt-8 text-[14px] text-gray-500 flex-shrink-0">
                   <Clock className="w-3.5 h-3.5" />
                   <span>{patient.lastVisit}</span>
                 </div>
 
                 {/* Upcoming */}
-                <div className="hidden xl:flex items-center gap-1.5 text-xs text-indigo-600 flex-shrink-0">
+                <div className="hidden xl:flex items-center gap-1.5 pt-8 text-[14px] text-indigo-600 flex-shrink-0">
                   <Calendar className="w-3.5 h-3.5" />
                   <span>{patient.upcomingAppointments[0]?.date || 'None'}</span>
                 </div>
-
-                {/* Expand indicator */}
-                <ChevronRight className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${expandedPatient === patient.id ? 'rotate-90' : 'group-hover:translate-x-0.5'}`} />
               </div>
 
               {/* Expanded details */}
@@ -220,16 +228,16 @@ export default function PatientSelectPage({ onContinue, initialSelectedPatientId
                   className="border-t border-gray-100"
                 >
                   <div className="px-5 py-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className={`grid grid-cols-1 gap-4 ${isPanel ? 'xl:grid-cols-3' : 'md:grid-cols-3'}`}>
                       {/* Diagnoses & Medications */}
                       <div className="space-y-3">
                         <div>
-                          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                          <h4 className="text-[14px] font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                             <Stethoscope className="w-3.5 h-3.5" /> Diagnoses
                           </h4>
                           <div className="space-y-1">
                             {patient.diagnoses.map((d, i) => (
-                              <div key={i} className="text-sm text-gray-800 flex items-start gap-2">
+                              <div key={i} className="text-[16px] text-gray-800 flex items-start gap-2">
                                 <span className="w-1.5 h-1.5 rounded-full bg-red-400 mt-1.5 flex-shrink-0" />
                                 {d}
                               </div>
@@ -237,12 +245,12 @@ export default function PatientSelectPage({ onContinue, initialSelectedPatientId
                           </div>
                         </div>
                         <div>
-                          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                          <h4 className="text-[14px] font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                             <Pill className="w-3.5 h-3.5" /> Medications
                           </h4>
                           <div className="space-y-1">
                             {patient.medications.map((m, i) => (
-                              <div key={i} className="text-sm text-gray-800 flex items-start gap-2">
+                              <div key={i} className="text-[16px] text-gray-800 flex items-start gap-2">
                                 <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
                                 {m}
                               </div>
@@ -253,41 +261,41 @@ export default function PatientSelectPage({ onContinue, initialSelectedPatientId
 
                       {/* Appointments */}
                       <div>
-                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <h4 className="text-[14px] font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5" /> Upcoming Appointments
                         </h4>
                         <div className="space-y-2">
                           {patient.upcomingAppointments.map((appt, i) => (
                             <div key={i} className="p-2.5 bg-indigo-50 rounded-lg border border-indigo-100">
-                              <p className="text-sm font-medium text-gray-900">{appt.type}</p>
-                              <p className="text-xs text-indigo-600 mt-0.5">{appt.date}</p>
+                              <p className="text-[16px] font-medium text-gray-900">{appt.type}</p>
+                              <p className="text-[14px] text-indigo-600 mt-0.5">{appt.date}</p>
                             </div>
                           ))}
                         </div>
                         <div className="mt-3 p-2.5 bg-gray-50 rounded-lg">
-                          <p className="text-xs text-gray-500">Last Visit</p>
-                          <p className="text-sm font-medium text-gray-900">{patient.lastVisit}</p>
+                          <p className="text-[14px] text-gray-500">Last Visit</p>
+                          <p className="text-[16px] font-medium text-gray-900">{patient.lastVisit}</p>
                         </div>
                       </div>
 
                       {/* Contact */}
                       <div>
-                        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Contact Details</h4>
+                        <h4 className="text-[14px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Contact Details</h4>
                         <div className="space-y-2.5">
-                          <div className="flex items-center gap-2.5 text-sm text-gray-700">
+                          <div className="flex items-center gap-2.5 text-[16px] text-gray-700">
                             <Phone className="w-4 h-4 text-gray-400" />
                             {patient.contact.phone}
                           </div>
-                          <div className="flex items-center gap-2.5 text-sm text-gray-700">
+                          <div className="flex items-center gap-2.5 text-[16px] text-gray-700">
                             <Mail className="w-4 h-4 text-gray-400" />
                             {patient.contact.email}
                           </div>
-                          <div className="flex items-start gap-2.5 text-sm text-gray-700">
+                          <div className="flex items-start gap-2.5 text-[16px] text-gray-700">
                             <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
                             {patient.contact.address}
                           </div>
                         </div>
-                        <div className="mt-3 text-xs text-gray-500">
+                        <div className="mt-3 text-[14px] text-gray-500">
                           <span className="font-medium">Insurance:</span> {patient.insuranceProvider}
                         </div>
                       </div>
@@ -309,10 +317,14 @@ export default function PatientSelectPage({ onContinue, initialSelectedPatientId
       </div>
 
       <div className="shrink-0 border-t border-gray-200 bg-white/95 backdrop-blur-md shadow-[0_-4px_24px_rgba(0,0,0,0.06)] z-20">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
-          <p className="text-sm text-gray-600">
+        <div className={`${isPanel ? 'max-w-none' : 'max-w-6xl mx-auto'} px-6 py-4 flex items-center justify-between gap-4 flex-wrap`}>
+          <p className="text-[16px] text-gray-600">
             {selectedIds.size === 0 ? (
               'Select at least one patient to continue.'
+            ) : isPanel ? (
+              <>
+                <span className="font-semibold text-gray-900">{selectedIds.size}</span> patient{selectedIds.size !== 1 ? 's' : ''} selected.
+              </>
             ) : selectedIds.size === 1 ? (
               <>
                 <span className="font-semibold text-gray-900">One</span> patient selected — continue to the Action Board.
@@ -327,9 +339,9 @@ export default function PatientSelectPage({ onContinue, initialSelectedPatientId
             type="button"
             disabled={selectedIds.size === 0}
             onClick={() => onContinue(Array.from(selectedIds))}
-            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:pointer-events-none text-white text-sm font-semibold transition-colors"
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:pointer-events-none text-white text-[16px] font-semibold transition-colors"
           >
-            {selectedIds.size === 1 ? "Next" : "Continue to clinical trials"}
+            {isPanel ? "Update selection" : selectedIds.size === 1 ? "Next" : "Continue to clinical trials"}
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>

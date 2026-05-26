@@ -731,23 +731,23 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop with blur */}
+          {/* Click catcher without dimming or blurring the page */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[45]"
+            transition={{ duration: 0.12 }}
+            className="fixed inset-0 z-[45] bg-transparent"
             onClick={onClose}
           />
           
-          {/* Panel — above Discovery header; aligned with Connection Analysis panel (z-50) */}
+          {/* Panel — slides in from the right without blurring the page */}
           <motion.div
-            initial={{ x: -500, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: -500, opacity: 0 }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed top-0 left-0 w-[500px] h-full bg-white shadow-2xl border-r border-gray-200 overflow-hidden z-50"
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            className="fixed right-0 top-0 z-50 h-full w-[min(680px,calc(100vw-32px))] overflow-hidden border-l border-gray-200 bg-white shadow-[-24px_0_64px_rgba(15,23,42,0.18)]"
           >
             {/* Header */}
             <div className="px-4 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
@@ -773,7 +773,7 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                   <X className="w-4 h-4 text-gray-600" />
                 </button>
               </div>
-              <p className="text-xs text-gray-600">
+              <p className="text-[14px] text-gray-600">
                 {selectedDoctor 
                   ? `${selectedDoctor.postsCount} posts • ${selectedDoctor.followersCount} followers`
                   : `${posts.length} recent posts from ${mockDoctors.length} doctors`}
@@ -784,20 +784,20 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
             {selectedDoctor && (
               <div className="px-4 py-4 bg-gradient-to-br from-blue-50 to-indigo-50 border-b border-gray-200">
                 <div className="flex items-start gap-3">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white text-[22px] font-bold flex-shrink-0">
                     {selectedDoctor.avatar}
                   </div>
                   <div className="flex-1 min-w-0">
                     <h5 className="font-semibold text-gray-900">{selectedDoctor.name}</h5>
-                    <p className="text-sm text-gray-600">{selectedDoctor.specialty}</p>
-                    <p className="text-xs text-gray-500 mt-1">{selectedDoctor.institution}</p>
-                    <p className="text-sm text-gray-700 mt-2 leading-relaxed">{selectedDoctor.bio}</p>
+                    <p className="text-[16px] text-gray-600">{selectedDoctor.specialty}</p>
+                    <p className="text-[14px] text-gray-500 mt-1">{selectedDoctor.institution}</p>
+                    <p className="text-[16px] text-gray-700 mt-2 leading-relaxed">{selectedDoctor.bio}</p>
                     <div className="flex items-center gap-4 mt-3">
-                      <div className="text-xs">
+                      <div className="text-[14px]">
                         <span className="font-semibold text-gray-900">{selectedDoctor.postsCount}</span>
                         <span className="text-gray-600"> posts</span>
                       </div>
-                      <div className="text-xs">
+                      <div className="text-[14px]">
                         <span className="font-semibold text-gray-900">{selectedDoctor.followersCount}</span>
                         <span className="text-gray-600"> followers</span>
                       </div>
@@ -810,7 +810,7 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                   <div className="mt-4 flex items-center gap-2">
                     <button
                       onClick={() => setViewMode('doctorPosts')}
-                      className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                      className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[16px] font-medium rounded-lg transition-colors"
                     >
                       Show all posts from {selectedDoctor.name.split(' ')[1]}
                     </button>
@@ -830,7 +830,7 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                     placeholder="Search posts, doctors, topics..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full pl-10 pr-4 py-2 text-[16px] border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                   {searchQuery && (
                     <button
@@ -846,7 +846,7 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowFilters(!showFilters)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[16px] transition-colors ${
                       selectedFilters.length > 0 || showFilters
                         ? 'bg-blue-100 text-blue-700'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -855,7 +855,7 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                     <Filter className="w-4 h-4" />
                     <span>Filters</span>
                     {selectedFilters.length > 0 && (
-                      <span className="ml-1 px-1.5 py-0.5 bg-blue-600 text-white text-xs rounded-full">
+                      <span className="ml-1 px-1.5 py-0.5 bg-blue-600 text-white text-[14px] rounded-full">
                         {selectedFilters.length}
                       </span>
                     )}
@@ -864,13 +864,13 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                   {(searchQuery || selectedFilters.length > 0) && (
                     <button
                       onClick={clearFilters}
-                      className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                      className="px-3 py-1.5 text-[16px] text-gray-600 hover:text-gray-900 transition-colors"
                     >
                       Clear all
                     </button>
                   )}
 
-                  <div className="ml-auto text-xs text-gray-500">
+                  <div className="ml-auto text-[14px] text-gray-500">
                     {filteredPosts.length} {filteredPosts.length === 1 ? 'post' : 'posts'}
                   </div>
                 </div>
@@ -890,7 +890,7 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                           <button
                             key={type}
                             onClick={() => toggleFilter(type)}
-                            className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs border transition-all ${
+                            className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-[14px] border transition-all ${
                               selectedFilters.includes(type)
                                 ? getPostTypeBadgeColor(type)
                                 : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
@@ -913,15 +913,13 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                 {filteredPosts.length === 0 ? (
                   <div className="text-center py-12">
                     <UserCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-sm text-gray-500">No posts yet</p>
+                    <p className="text-[16px] text-gray-500">No posts yet</p>
                   </div>
                 ) : (
                   filteredPosts.map((post) => (
-                    <motion.div
+                    <div
                       key={post.id}
                       id={`post-${post.id}`}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
                       className={`bg-white rounded-lg border shadow-sm hover:shadow-md transition-all overflow-hidden ${
                         post.supabasePostId === highlightSupabasePostId
                           ? 'border-indigo-400 ring-2 ring-indigo-200'
@@ -932,7 +930,7 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                       {post.isRepostedByYou && (
                         <div className="px-4 py-2 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-200 flex items-center gap-2">
                           <Repeat className="w-4 h-4 text-green-600" />
-                          <span className="text-xs font-medium text-green-700">You reposted this</span>
+                          <span className="text-[14px] font-medium text-green-700">You reposted this</span>
                         </div>
                       )}
 
@@ -941,22 +939,22 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                         <div className="flex items-start gap-3">
                           <button
                             onClick={() => handleDoctorClick(post.doctorId)}
-                            className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0 hover:scale-105 transition-transform"
+                            className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white text-[16px] font-bold flex-shrink-0 hover:scale-105 transition-transform"
                           >
                             {post.doctorAvatar}
                           </button>
                           <div className="flex-1 min-w-0">
                             <button
                               onClick={() => handleDoctorClick(post.doctorId)}
-                              className="font-semibold text-gray-900 hover:text-blue-600 transition-colors text-sm"
+                              className="font-semibold text-gray-900 hover:text-blue-600 transition-colors text-[16px]"
                             >
                               {post.doctorName}
                             </button>
-                            <p className="text-xs text-gray-600">{post.doctorSpecialty}</p>
+                            <p className="text-[14px] text-gray-600">{post.doctorSpecialty}</p>
                             <div className="flex items-center gap-2 mt-1">
-                              <span className="text-xs text-gray-500">{post.timestamp}</span>
+                              <span className="text-[14px] text-gray-500">{post.timestamp}</span>
                               <span className="text-gray-400">•</span>
-                              <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border ${getPostTypeBadgeColor(post.type)}`}>
+                              <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[14px] border ${getPostTypeBadgeColor(post.type)}`}>
                                 {getPostTypeIcon(post.type)}
                                 <span className="font-medium">{getPostTypeLabel(post.type)}</span>
                               </div>
@@ -966,7 +964,7 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
 
                         {/* Post Content */}
                         <div className="mt-3">
-                          <p className="text-sm text-gray-800 leading-relaxed">{post.content}</p>
+                          <p className="text-[16px] text-gray-800 leading-relaxed">{post.content}</p>
 
                           {/* Attachments */}
                           {post.attachments && post.attachments.length > 0 && (
@@ -996,13 +994,13 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                                   }}
                                   className="w-full text-left p-3 bg-gradient-to-br from-gray-50 to-blue-50 rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all group"
                                 >
-                                  <p className="text-sm font-semibold text-gray-900 mb-1 group-hover:text-blue-600 transition-colors">
+                                  <p className="text-[16px] font-semibold text-gray-900 mb-1 group-hover:text-blue-600 transition-colors">
                                     {attachment.title}
                                   </p>
                                   {attachment.description && (
-                                    <p className="text-xs text-gray-600">{attachment.description}</p>
+                                    <p className="text-[14px] text-gray-600">{attachment.description}</p>
                                   )}
-                                  <p className="text-xs text-blue-600 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <p className="text-[14px] text-blue-600 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                     {post.type === 'connection' ? 'Click to load this connection →' : 'Click to read →'}
                                   </p>
                                 </button>
@@ -1025,7 +1023,7 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                           <Heart
                             className={`w-4 h-4 ${post.liked ? 'fill-current' : ''}`}
                           />
-                          <span className="text-xs font-medium">{post.likes}</span>
+                          <span className="text-[14px] font-medium">{post.likes}</span>
                         </button>
 
                         <button
@@ -1037,7 +1035,7 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                           }`}
                         >
                           <MessageCircle className="w-4 h-4" />
-                          <span className="text-xs font-medium">
+                          <span className="text-[14px] font-medium">
                             {(() => {
                               const loaded = (commentsByPost[getCommentKey(post.id)] || []).length;
                               const preCount = post.supabasePostId ? (commentCounts[post.supabasePostId] || 0) : 0;
@@ -1052,7 +1050,7 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-50 transition-all"
                         >
                           <Share2 className="w-4 h-4" />
-                          <span className="text-xs font-medium">{post.shares}</span>
+                          <span className="text-[14px] font-medium">{post.shares}</span>
                         </button>
 
                         <button
@@ -1060,7 +1058,7 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-50 transition-all"
                         >
                           <Repeat className="w-4 h-4" />
-                          <span className="text-xs font-medium">{post.reposts}</span>
+                          <span className="text-[14px] font-medium">{post.reposts}</span>
                         </button>
                       </div>
 
@@ -1082,26 +1080,26 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                               ) : (
                                 <>
                                   {(commentsByPost[getCommentKey(post.id)] || []).length === 0 ? (
-                                    <p className="text-xs text-gray-400 text-center py-2">
+                                    <p className="text-[14px] text-gray-400 text-center py-2">
                                       {post.supabasePostId ? 'No comments yet. Be the first!' : 'Comments available on user-created posts'}
                                     </p>
                                   ) : (
                                     <div className="space-y-3 max-h-48 overflow-y-auto">
                                       {(commentsByPost[getCommentKey(post.id)] || []).map((comment) => (
                                         <div key={comment.id} className="flex items-start gap-2">
-                                          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                                          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-[12px] font-bold flex-shrink-0">
                                             {comment.profiles?.avatar_initials || '?'}
                                           </div>
                                           <div className="flex-1 min-w-0">
                                             <div className="flex items-baseline gap-2">
-                                              <span className="text-xs font-semibold text-gray-900">
+                                              <span className="text-[14px] font-semibold text-gray-900">
                                                 {comment.profiles?.full_name || 'Anonymous'}
                                               </span>
-                                              <span className="text-[10px] text-gray-400">
+                                              <span className="text-[12px] text-gray-400">
                                                 {new Date(comment.created_at).toLocaleDateString()}
                                               </span>
                                             </div>
-                                            <p className="text-xs text-gray-700 leading-relaxed mt-0.5">{comment.content}</p>
+                                            <p className="text-[14px] text-gray-700 leading-relaxed mt-0.5">{comment.content}</p>
                                           </div>
                                         </div>
                                       ))}
@@ -1109,7 +1107,7 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                                   )}
 
                                   <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-                                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-[12px] font-bold flex-shrink-0">
                                       {profile?.avatar_initials || 'U'}
                                     </div>
                                     <input
@@ -1123,7 +1121,7 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                                           handleSubmitComment(post.id);
                                         }
                                       }}
-                                      className="flex-1 px-3 py-1.5 text-xs border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                      className="flex-1 px-3 py-1.5 text-[14px] border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     />
                                     <button
                                       onClick={() => handleSubmitComment(post.id)}
@@ -1139,7 +1137,7 @@ export function DoctorFeed({ isOpen, onClose, onArticleClick, onConnectionClick,
                           </motion.div>
                         )}
                       </AnimatePresence>
-                    </motion.div>
+                    </div>
                   ))
                 )}
               </div>

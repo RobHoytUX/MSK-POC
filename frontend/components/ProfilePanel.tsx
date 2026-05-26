@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { X, Mail, Stethoscope, Building2, User, Save, LogOut } from 'lucide-react';
 import { useAuth } from '../lib/AuthContext';
 
@@ -40,31 +40,31 @@ export default function ProfilePanel({ isOpen, onClose }: ProfilePanelProps) {
     onClose();
   };
 
-  if (!isOpen) return null;
-
   return (
-    <>
+    <AnimatePresence>
+      {isOpen ? (
+        <>
       <div
-        className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
+        className="fixed inset-0 z-40 bg-transparent"
         onClick={onClose}
       />
       <motion.div
-        initial={{ x: 400, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        exit={{ x: 400, opacity: 0 }}
-        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-        className="fixed right-0 top-0 h-full w-[400px] bg-white shadow-2xl z-50 flex flex-col"
+        initial={{ y: 16, opacity: 0, scale: 0.98 }}
+        animate={{ y: 0, opacity: 1, scale: 1 }}
+        exit={{ y: 16, opacity: 0, scale: 0.98 }}
+        transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+        className="fixed bottom-5 left-5 z-50 flex max-h-[min(680px,calc(100vh-40px))] w-[380px] flex-col overflow-hidden rounded-[20px] border border-black/10 bg-white/95 shadow-2xl"
       >
-        <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">My Profile</h2>
+        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+          <h2 className="text-base font-semibold text-gray-900">My Profile</h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="flex flex-col items-center mb-8">
-            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+        <div className="flex-1 overflow-y-auto p-5">
+          <div className="mb-6 flex flex-col items-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-xl font-bold text-white shadow-lg">
               {profile?.avatar_initials || 'U'}
             </div>
             <h3 className="mt-4 text-xl font-semibold text-gray-900">{profile?.full_name || 'Doctor'}</h3>
@@ -152,31 +152,35 @@ export default function ProfilePanel({ isOpen, onClose }: ProfilePanelProps) {
                 </div>
               </div>
 
-              <button
-                onClick={() => {
-                  setFullName(profile?.full_name || '');
-                  setSpecialty(profile?.specialty || '');
-                  setInstitution(profile?.institution || '');
-                  setIsEditing(true);
-                }}
-                className="w-full py-2.5 border border-indigo-300 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors"
-              >
-                Edit Profile
-              </button>
             </div>
           )}
         </div>
 
-        <div className="p-6 border-t border-gray-200">
-          <button
-            onClick={handleSignOut}
-            className="w-full py-2.5 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
-          >
-            <LogOut className="w-4 h-4" />
-            Sign Out
-          </button>
-        </div>
+        {!isEditing ? (
+          <div className="grid grid-cols-2 gap-3 border-t border-gray-200 p-5">
+            <button
+              onClick={() => {
+                setFullName(profile?.full_name || '');
+                setSpecialty(profile?.specialty || '');
+                setInstitution(profile?.institution || '');
+                setIsEditing(true);
+              }}
+              className="inline-flex items-center justify-center rounded-full bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+            >
+              Edit Profile
+            </button>
+            <button
+              onClick={handleSignOut}
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-rose-700"
+            >
+              <LogOut className="w-4 h-4" />
+              Sign Out
+            </button>
+          </div>
+        ) : null}
       </motion.div>
-    </>
+        </>
+      ) : null}
+    </AnimatePresence>
   );
 }

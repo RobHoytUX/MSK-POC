@@ -1,5 +1,5 @@
-import { ReactNode, useState } from "react";
-import { Search, X, ExternalLink, TrendingUp, Users, FileText, Hash, Sparkles, UserRound } from "lucide-react";
+import { useState } from "react";
+import { Search, X, ExternalLink, TrendingUp, Users, FileText, Hash, Sparkles, UserRound, Send } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
 interface ResearchArticle {
@@ -346,13 +346,13 @@ const getTrendingBadgeColor = (score: number) => {
 
 interface TrendingResearchPageProps {
   onClose: () => void;
-  headerActions?: ReactNode;
-  tabRowActions?: ReactNode;
   selectedPatient?: { name: string; age: number; gender: string; diagnoses: string[]; mrn: string };
   onChangePatient?: () => void;
+  onOpenChart?: () => void;
+  onAskAI?: () => void;
 }
 
-export default function TrendingResearchPage({ headerActions, tabRowActions, selectedPatient, onChangePatient }: TrendingResearchPageProps) {
+export default function TrendingResearchPage({ selectedPatient, onChangePatient, onOpenChart, onAskAI }: TrendingResearchPageProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedArticle, setSelectedArticle] = useState<ResearchArticle | null>(null);
   const [isPanelVisible, setIsPanelVisible] = useState(false);
@@ -386,62 +386,145 @@ export default function TrendingResearchPage({ headerActions, tabRowActions, sel
 
   return (
     <>
-      <div className="h-full flex flex-col bg-white">
-        {/* Header */}
-        <div className="bg-white border-b border-gray-200 shadow-sm">
-          <div className="px-8 py-6">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h1 className="text-[27px] font-medium text-gray-900 mb-1">Trending Research</h1>
-                {selectedPatient ? (
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-gray-500 text-base mt-1">
-                    {onChangePatient && (
-                      <button
-                        type="button"
-                        onClick={onChangePatient}
-                        className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-medium border border-indigo-200 transition-colors mr-1"
-                      >
-                        <UserRound className="w-3.5 h-3.5" />
-                        Change Patient
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-gray-500">Latest breakthrough studies relevant to your diagnosis and treatment</p>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="relative w-96">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+      <div className="relative h-full min-h-0 overflow-hidden bg-[#f7f6f3] text-slate-950">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_40%,#fbfaf6_0%,#f4f2ec_60%,#ecead1_100%)]" />
+        <div
+          className="pointer-events-none absolute inset-[-2000px] opacity-70"
+          style={{
+            backgroundImage: "radial-gradient(rgba(20,20,20,0.08) 1px, transparent 1px)",
+            backgroundSize: "24px 24px",
+          }}
+        />
+
+        <aside className="absolute left-5 top-[84px] z-20 flex h-[min(540px,calc(100%_-_104px))] w-[380px] flex-col overflow-hidden rounded-[20px] border border-black/10 bg-white/85 shadow-2xl backdrop-blur-xl">
+          <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-600 shadow-[0_0_0_4px_#ece6ff]">
+              <Sparkles className="h-4 w-4 animate-pulse text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[18px] font-semibold">Clinical Intelligence</p>
+              <p className="truncate text-[16px] text-slate-500">
+                {selectedPatient ? `Research context for ${selectedPatient.name}` : "Select a patient to begin"}
+              </p>
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+            <div className="rounded-2xl bg-violet-50 p-4 ring-1 ring-violet-100">
+              <p className="mb-2 font-mono text-[12px] font-semibold uppercase tracking-wide text-violet-600">
+                Research Scope
+              </p>
+              <p className="text-[16px] leading-relaxed text-slate-700">
+                {selectedPatient
+                  ? `Trending oncology research relevant to ${selectedPatient.diagnoses[0]}.`
+                  : "Review breakthrough studies and clinical signals across oncology topics."}
+              </p>
+            </div>
+            <div className="mt-4 space-y-3">
+              {[
+                `${filteredArticles.length} visible article${filteredArticles.length === 1 ? "" : "s"}`,
+                filterCategory ? `Category filter: ${filterCategory}` : "All categories shown",
+                searchQuery ? `Search: ${searchQuery}` : "No search filter active",
+              ].map((item) => (
+                <div key={item} className="rounded-2xl bg-white/80 p-3 text-[16px] leading-relaxed text-slate-600 ring-1 ring-slate-100">
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="border-t border-slate-100 px-4 py-3">
+            <button
+              type="button"
+              onClick={onAskAI}
+              className="flex w-full items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-left text-[16px] text-slate-500 transition hover:border-violet-300 hover:text-violet-700"
+            >
+              <span className="min-w-0 flex-1 truncate">Ask about research...</span>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white">
+                <Send className="h-4 w-4" />
+              </span>
+            </button>
+          </div>
+        </aside>
+
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={onOpenChart}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              onOpenChart?.();
+            }
+          }}
+          className="absolute right-5 top-5 z-40 w-[380px] rounded-[20px] border border-black/10 bg-white/85 p-4 text-left shadow-2xl backdrop-blur-xl transition hover:border-violet-200 hover:bg-white/95"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-300 text-[18px] font-semibold text-white">
+              {selectedPatient?.name.split(" ").map((n) => n[0]).join("").slice(0, 2) ?? "PT"}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[20px] font-semibold">{selectedPatient?.name ?? "No patient selected"}</p>
+              <p className="truncate text-[16px] text-slate-500">
+                {selectedPatient ? `${selectedPatient.age}yo ${selectedPatient.gender} · MRN ${selectedPatient.mrn}` : "Open patient selection"}
+              </p>
+            </div>
+          </div>
+          {selectedPatient ? (
+            <div className="mt-3 flex items-end justify-between gap-3">
+              <span className="inline-flex min-w-0 rounded-full bg-pink-100 px-3 py-1 text-[16px] font-medium text-pink-900">
+                <span className="truncate">{selectedPatient.diagnoses[0]}</span>
+              </span>
+              {onChangePatient ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onChangePatient();
+                  }}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-violet-600 px-3 py-1.5 text-[14px] font-semibold text-white transition hover:bg-violet-700"
+                >
+                  <UserRound className="h-3.5 w-3.5" />
+                  Change Patient
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        <aside className="absolute left-[420px] right-[420px] top-5 z-40 flex min-h-[116px] flex-col justify-center overflow-hidden rounded-[20px] border border-black/10 bg-white/85 p-4 shadow-lg shadow-slate-900/10 backdrop-blur-xl">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[18px] font-semibold">Research Filters</p>
+              <p className="text-[16px] text-slate-500">
+                Showing {filteredArticles.length} article{filteredArticles.length !== 1 ? "s" : ""}
+                {filterCategory ? ` in ${filterCategory}` : ""}
+              </p>
+            </div>
+            <div className="relative w-[min(430px,45%)] shrink-0">
+              <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-blue-700" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search by title, authors, journal, or keywords..."
-                    className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="w-full rounded-full border border-slate-200 bg-white py-2 pl-10 pr-10 text-[16px] focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-200"
                   />
                   {searchQuery && (
                     <button
                       onClick={() => setSearchQuery("")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors"
+                  className="absolute right-3 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full transition-colors hover:bg-slate-100"
                     >
-                      <X className="w-4 h-4 text-gray-600" />
+                  <X className="h-4 w-4 text-slate-600" />
                     </button>
                   )}
                 </div>
-                {headerActions}
-              </div>
             </div>
-            
-            {/* Row 2: category filters left, action buttons right — mirrors Discovery tabs row */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex flex-wrap gap-1">
+          <div className="flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                 <button
                   onClick={() => setFilterCategory(null)}
-                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+              className={`shrink-0 rounded-full px-3 py-1.5 text-[14px] font-medium transition-all ${
                     !filterCategory
-                      ? "bg-indigo-600 text-white shadow-sm"
-                      : "bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+                  ? "bg-violet-600 text-white shadow-sm"
+                  : "border border-slate-200 bg-white text-slate-600 hover:border-violet-300 hover:text-violet-700"
                   }`}
                 >
                   All Categories
@@ -450,94 +533,98 @@ export default function TrendingResearchPage({ headerActions, tabRowActions, sel
                   <button
                     key={category}
                     onClick={() => setFilterCategory(category)}
-                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                className={`shrink-0 rounded-full px-3 py-1.5 text-[14px] font-medium transition-all ${
                       filterCategory === category
-                        ? "bg-indigo-600 text-white shadow-sm"
-                        : "bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+                    ? "bg-violet-600 text-white shadow-sm"
+                    : "border border-slate-200 bg-white text-slate-600 hover:border-violet-300 hover:text-violet-700"
                     }`}
                   >
                     {category}
                   </button>
                 ))}
-              </div>
-              {tabRowActions && <div className="flex items-center gap-2 ml-4 shrink-0">{tabRowActions}</div>}
-            </div>
           </div>
-        </div>
+        </aside>
 
-        {/* Results Summary */}
-        <div className="px-8 py-4 bg-gray-50 border-b border-gray-200 -mt-4">
-          <p className="text-gray-600 text-sm">
-            Showing <span className="font-semibold text-gray-900">{filteredArticles.length}</span> trending research article{filteredArticles.length !== 1 ? 's' : ''}
-            {searchQuery && <span> matching "{searchQuery}"</span>}
-            {filterCategory && <span> in {filterCategory}</span>}
-          </p>
-        </div>
-
-        {/* Articles List */}
-        <div className="flex-1 overflow-y-auto px-8 py-6">
-          <div className="space-y-4">
+        <main className="relative z-30 h-full overflow-y-auto pb-8 pl-[420px] pr-5 pt-[172px]">
+          <div className="rounded-[28px] border border-black/10 bg-white/80 p-5 shadow-2xl backdrop-blur-xl">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">Trending Research</h1>
+                <p className="mt-1 text-[16px] text-slate-500">Latest breakthrough studies relevant to diagnosis and treatment.</p>
+              </div>
+              <span className="rounded-full bg-violet-50 px-3 py-1 text-[16px] font-semibold text-violet-700">
+                {filteredArticles.length} article{filteredArticles.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+            <div className="space-y-4">
             {filteredArticles.map((article) => (
               <div
                 key={article.id}
-                className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-lg hover:border-indigo-300 transition-all cursor-pointer"
+                  className="cursor-pointer rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:border-violet-300 hover:shadow-lg"
                 onClick={() => handleArticleClick(article)}
               >
-                {/* Header */}
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className={`text-xs px-2.5 py-1 rounded-full border ${getTrendingBadgeColor(article.trending.score)}`}>
-                        <TrendingUp className="w-3 h-3 inline mr-1" />
-                        Trending {article.trending.score}
-                      </span>
-                      <span className={`text-xs px-2.5 py-1 rounded-full border ${getCategoryColor(article.category)}`}>
-                        {article.category}
-                      </span>
-                      <span className="text-xs text-gray-500">{article.publicationDate}</span>
+                <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+                  <div>
+                    {/* Header */}
+                    <div className="mb-3 flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className={`text-[14px] px-2.5 py-1 rounded-full border ${getTrendingBadgeColor(article.trending.score)}`}>
+                            <TrendingUp className="w-3 h-3 inline mr-1" />
+                            Trending {article.trending.score}
+                          </span>
+                          <span className={`text-[14px] px-2.5 py-1 rounded-full border ${getCategoryColor(article.category)}`}>
+                            {article.category}
+                          </span>
+                          <span className="text-[14px] text-gray-500">{article.publicationDate}</span>
+                        </div>
+                        <h3 className="mb-2 text-[20px] font-semibold leading-snug text-slate-950">{article.title}</h3>
+                        <p className="text-[16px] text-gray-600 mb-2">{article.authors.join(", ")}</p>
+                        <p className="text-[14px] text-indigo-600">{article.journal} • {article.pmid}</p>
+                      </div>
                     </div>
-                    <h3 className="text-gray-900 mb-2">{article.title}</h3>
-                    <p className="text-sm text-gray-600 mb-2">{article.authors.join(", ")}</p>
-                    <p className="text-xs text-indigo-600">{article.journal} • {article.pmid}</p>
-                  </div>
-                </div>
 
-                {/* Metrics */}
-                <div className="flex items-center gap-6 mb-4 pb-4 border-b border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <Hash className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm text-gray-600">{article.trending.citations} citations</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm text-gray-600">{article.trending.views} views</span>
-                  </div>
-                </div>
+                    {/* Metrics */}
+                    <div className="mb-4 flex items-center gap-6">
+                      <div className="flex items-center gap-2">
+                        <Hash className="w-4 h-4 text-gray-400" />
+                        <span className="text-[16px] text-gray-600">{article.trending.citations} citations</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-gray-400" />
+                        <span className="text-[16px] text-gray-600">{article.trending.views} views</span>
+                      </div>
+                    </div>
 
-                {/* Relevance */}
-                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-4">
-                  <p className="text-xs text-indigo-900">
-                    <span className="font-semibold">Why this matters: </span>
-                    {article.relevance}
-                  </p>
-                </div>
+                    {/* Keywords */}
+                    <div className="flex flex-wrap gap-2">
+                      {article.keywords.map((keyword) => (
+                        <span
+                          key={keyword.id}
+                          className={`text-[14px] px-2 py-1 rounded-full border ${getKeywordColor(keyword.color)}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {keyword.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
 
-                {/* Keywords */}
-                <div className="flex flex-wrap gap-2">
-                  {article.keywords.map((keyword) => (
-                    <span
-                      key={keyword.id}
-                      className={`text-xs px-2 py-1 rounded-full border ${getKeywordColor(keyword.color)}`}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {keyword.label}
-                    </span>
-                  ))}
+                  <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+                    <p className="mb-2 text-[14px] font-semibold uppercase tracking-wide text-indigo-700">Why this matters</p>
+                    <p className="text-[16px] leading-relaxed text-indigo-950">{article.relevance}</p>
+                  </div>
                 </div>
               </div>
-            ))}
+              ))}
+              {filteredArticles.length === 0 ? (
+                <p className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-6 text-center text-[16px] text-slate-500">
+                  No research articles match the current filters.
+                </p>
+              ) : null}
+            </div>
           </div>
-        </div>
+        </main>
       </div>
 
       {/* Article Details Side Panel */}
@@ -559,17 +646,17 @@ export default function TrendingResearchPage({ headerActions, tabRowActions, sel
             <div className="flex items-center justify-between px-8 py-6 border-b border-gray-200 bg-white">
               <div className="flex-1 pr-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <span className={`text-xs px-2.5 py-1 rounded-full border ${getTrendingBadgeColor(selectedArticle.trending.score)}`}>
+                  <span className={`text-[14px] px-2.5 py-1 rounded-full border ${getTrendingBadgeColor(selectedArticle.trending.score)}`}>
                     <TrendingUp className="w-3 h-3 inline mr-1" />
                     Trending {selectedArticle.trending.score}
                   </span>
-                  <span className={`text-xs px-2.5 py-1 rounded-full border ${getCategoryColor(selectedArticle.category)}`}>
+                  <span className={`text-[14px] px-2.5 py-1 rounded-full border ${getCategoryColor(selectedArticle.category)}`}>
                     {selectedArticle.category}
                   </span>
                 </div>
-                <h2 className="text-gray-900 text-xl mb-2">{selectedArticle.title}</h2>
-                <p className="text-sm text-gray-600">{selectedArticle.authors.join(", ")}</p>
-                <p className="text-xs text-indigo-600 mt-1">{selectedArticle.journal} • {selectedArticle.publicationDate}</p>
+                <h2 className="text-gray-900 text-[22px] mb-2">{selectedArticle.title}</h2>
+                <p className="text-[16px] text-gray-600">{selectedArticle.authors.join(", ")}</p>
+                <p className="text-[14px] text-indigo-600 mt-1">{selectedArticle.journal} • {selectedArticle.publicationDate}</p>
               </div>
               <button
                 onClick={handleClosePanel}
@@ -585,26 +672,26 @@ export default function TrendingResearchPage({ headerActions, tabRowActions, sel
                 {/* Metrics Row */}
                 <div className="grid grid-cols-3 gap-3">
                   <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-                    <p className="text-blue-600 text-xs mb-1">Citations</p>
-                    <p className="text-gray-900 text-xl">{selectedArticle.trending.citations}</p>
+                    <p className="text-blue-600 text-[14px] mb-1">Citations</p>
+                    <p className="text-gray-900 text-[22px]">{selectedArticle.trending.citations}</p>
                   </div>
                   <div className="bg-purple-50 rounded-lg p-4 border border-purple-100">
-                    <p className="text-purple-600 text-xs mb-1">Views</p>
-                    <p className="text-gray-900 text-xl">{selectedArticle.trending.views}</p>
+                    <p className="text-purple-600 text-[14px] mb-1">Views</p>
+                    <p className="text-gray-900 text-[22px]">{selectedArticle.trending.views}</p>
                   </div>
                   <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-100">
-                    <p className="text-emerald-600 text-xs mb-1">Trending Score</p>
-                    <p className="text-gray-900 text-xl">{selectedArticle.trending.score}</p>
+                    <p className="text-emerald-600 text-[14px] mb-1">Trending Score</p>
+                    <p className="text-gray-900 text-[22px]">{selectedArticle.trending.score}</p>
                   </div>
                 </div>
 
                 {/* Relevance */}
                 <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
-                  <h3 className="text-indigo-900 text-sm mb-2 flex items-center gap-2">
+                  <h3 className="text-indigo-900 text-[16px] mb-2 flex items-center gap-2">
                     <Sparkles className="w-4 h-4" />
                     Why This Matters to You
                   </h3>
-                  <p className="text-indigo-800 text-sm leading-relaxed">{selectedArticle.relevance}</p>
+                  <p className="text-indigo-800 text-[16px] leading-relaxed">{selectedArticle.relevance}</p>
                 </div>
 
                 {/* Abstract */}
@@ -614,7 +701,7 @@ export default function TrendingResearchPage({ headerActions, tabRowActions, sel
                     Abstract
                   </h3>
                   <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-gray-700 leading-relaxed text-sm">{selectedArticle.abstract}</p>
+                    <p className="text-gray-700 leading-relaxed text-[16px]">{selectedArticle.abstract}</p>
                   </div>
                 </div>
 
@@ -624,7 +711,7 @@ export default function TrendingResearchPage({ headerActions, tabRowActions, sel
                   <div className="bg-gray-50 rounded-lg p-4">
                     <ul className="space-y-2">
                       {selectedArticle.keyFindings.map((finding, idx) => (
-                        <li key={idx} className="text-gray-700 text-sm flex items-start gap-3">
+                        <li key={idx} className="text-gray-700 text-[16px] flex items-start gap-3">
                           <span className="text-indigo-600 mt-0.5 flex-shrink-0">✓</span>
                           <span>{finding}</span>
                         </li>
@@ -641,7 +728,7 @@ export default function TrendingResearchPage({ headerActions, tabRowActions, sel
                       <Popover key={keyword.id}>
                         <PopoverTrigger asChild>
                           <button
-                            className={`px-3 py-1.5 rounded-full text-xs border transition-all ${getKeywordColor(keyword.color)}`}
+                            className={`px-3 py-1.5 rounded-full text-[14px] border transition-all ${getKeywordColor(keyword.color)}`}
                           >
                             {keyword.label}
                           </button>
@@ -649,12 +736,12 @@ export default function TrendingResearchPage({ headerActions, tabRowActions, sel
                         <PopoverContent className="w-80" side="left" align="start">
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                              <h4 className="text-gray-900 text-sm">{keyword.label}</h4>
-                              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                              <h4 className="text-gray-900 text-[16px]">{keyword.label}</h4>
+                              <span className="text-[14px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
                                 {keyword.category}
                               </span>
                             </div>
-                            <p className="text-gray-600 text-xs leading-relaxed">{keyword.description}</p>
+                            <p className="text-gray-600 text-[14px] leading-relaxed">{keyword.description}</p>
                           </div>
                         </PopoverContent>
                       </Popover>
@@ -664,15 +751,15 @@ export default function TrendingResearchPage({ headerActions, tabRowActions, sel
 
                 {/* Publication Details */}
                 <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="text-gray-900 text-sm mb-3">Publication Details</h3>
-                  <div className="space-y-2 text-sm">
+                  <h3 className="text-gray-900 text-[16px] mb-3">Publication Details</h3>
+                  <div className="space-y-2 text-[16px]">
                     <div className="flex justify-between">
                       <span className="text-gray-500">PMID:</span>
                       <span className="text-gray-900 font-mono">{selectedArticle.pmid}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-500">DOI:</span>
-                      <span className="text-gray-900 font-mono text-xs">{selectedArticle.doi}</span>
+                      <span className="text-gray-900 font-mono text-[14px]">{selectedArticle.doi}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-500">Published:</span>
@@ -687,7 +774,7 @@ export default function TrendingResearchPage({ headerActions, tabRowActions, sel
                     href={`https://pubmed.ncbi.nlm.nih.gov/${selectedArticle.pmid.replace('PMID: ', '')}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors text-sm"
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors text-[16px]"
                   >
                     <ExternalLink className="w-4 h-4" />
                     View on PubMed
