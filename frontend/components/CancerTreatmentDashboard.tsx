@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Newspaper, Paperclip, History, Search, CalendarDays, Bell, SlidersHorizontal, Layers3, Stethoscope, Microscope, UserRound, UsersRound, PanelRightOpen, ListFilter, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Calendar as CalendarIcon, FileText, Activity, Sparkles, X, Send, Mic, Paperclip, History, CalendarDays, Bell, Layers3, UserRound, UsersRound, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -10,6 +10,7 @@ import TrendingResearchPage from "./TrendingResearchPage";
 import AIPage from "./AIPage";
 import DashboardPage from "./DashboardPage";
 import PatientChartPage from "./PatientChartPage";
+import PatientChartSidePanel from "./PatientChartSidePanel";
 import NewsFeedPanel from "./NewsFeedPanel";
 import {
   QuantumPanel,
@@ -18,9 +19,7 @@ import {
   type DoctorFeedCanvasBridge,
   type PendingDoctorFeedConnection,
 } from './keywords-wave';
-import KeywordTree from './KeywordTree';
-import KeywordTreePubmedPanel from './KeywordTreePubmedPanel';
-import KeywordTreeDiscoveryChat from './KeywordTreeDiscoveryChat';
+import InfiniteKeywordCanvasView from './InfiniteKeywordCanvasView';
 import {
   findTreeNodeById,
   type TreeNode,
@@ -40,7 +39,6 @@ import ProfilePanel from './ProfilePanel';
 import NotificationsPanel from './NotificationsPanel';
 import { Patient, patients } from '../lib/patients';
 import { getDiscoveryTimelineForPatient } from "../lib/discoveryTimeline";
-import mapsWhiteLogo from '../src/assets/maps-white.png';
 import { loadNavState, saveNavState, type PersistedNav } from '../lib/appSession';
 
 interface ClinicalAiPanelMessage {
@@ -600,7 +598,7 @@ export default function CancerTreatmentDashboard({
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [clinicalChatPending, setClinicalChatPending] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const searchQuery = "";
   const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
   const navInitRef = useRef<PersistedNav | null>(null);
   if (navInitRef.current === null) {
@@ -612,11 +610,11 @@ export default function CancerTreatmentDashboard({
     focusTrialId: string | null;
   }>({ listTab: "all", focusTrialId: null });
   const [isGlobalQuantumOpen, setIsGlobalQuantumOpen] = useState(false);
-  const [featureScope, setFeatureScope] = useState<FeatureScope>(() => {
+  const [featureScope] = useState<FeatureScope>(() => {
     const saved = localStorage.getItem("maps-feature-scope");
     return saved === "clinical" || saved === "research" ? saved : "all";
   });
-  const [isScopePickerOpen, setIsScopePickerOpen] = useState(false);
+  const [isNavMenuOpen, setIsNavMenuOpen] = useState(false);
   const [showKeywordsTree, setShowKeywordsTree] = useState(false);
   const [discoveryTab, setDiscoveryTab] = useState<"timeline" | "keywords">(() => navInitRef.current!.discoveryTab);
   const [trialDiscoverySidebarOpen, setTrialDiscoverySidebarOpen] = useState(
@@ -787,7 +785,6 @@ export default function CancerTreatmentDashboard({
     [cohortPatientIds]
   );
 
-  const scopePickerRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState<ClinicalAiPanelMessage[]>([
     {
       id: "1",
@@ -851,53 +848,6 @@ export default function CancerTreatmentDashboard({
       setTrialKeywordCanvasPatientId(null);
     }
   }, [trialDiscoverySidebarOpen]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (!scopePickerRef.current?.contains(event.target as Node)) {
-        setIsScopePickerOpen(false);
-      }
-    };
-
-    if (isScopePickerOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isScopePickerOpen]);
-
-  const renderFeatureScopeToggle = () => (
-    <div className="flex flex-col gap-1">
-      {(
-        [
-          { id: "all", label: "All", Icon: Layers3 },
-          { id: "clinical", label: "Clinical", Icon: Stethoscope },
-          { id: "research", label: "Research", Icon: Microscope },
-        ] as const
-      ).map(({ id, label, Icon }) => (
-        <button
-          key={id}
-          onClick={() => {
-            setFeatureScope(id);
-            setIsScopePickerOpen(false);
-          }}
-          className={`w-full text-left px-3 py-2 text-[15px] rounded-md transition-colors ${
-            featureScope === id
-              ? "bg-indigo-600 text-white shadow-sm"
-              : "bg-gray-50 text-gray-700 hover:bg-gray-100"
-          }`}
-          title={`Focus on ${id} features`}
-        >
-          <span className="inline-flex items-center gap-2">
-            <Icon className="w-4 h-4" />
-            {label}
-          </span>
-        </button>
-      ))}
-    </div>
-  );
 
   // Fetch unread notification count on mount
   useEffect(() => {
@@ -987,13 +937,6 @@ export default function CancerTreatmentDashboard({
             {unreadNotifications > 9 ? '9+' : unreadNotifications}
           </span>
         )}
-      </button>
-      <button
-        onClick={() => setIsProfileOpen(true)}
-        className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-sm font-bold hover:scale-105 transition-transform shadow-md"
-        title="My Profile"
-      >
-        {profile?.avatar_initials || 'U'}
       </button>
     </>
   );
@@ -1093,126 +1036,151 @@ export default function CancerTreatmentDashboard({
     };
   }, [discoveryTimelineData, activeTimeRange, startMonth, endMonth, searchQuery, selectedKeyword, customFrom, customTo]);
 
-  return (
-    <div className="flex h-screen bg-slate-50">
-      {/* Sidebar */}
-      <div className="relative w-20 bg-indigo-600 flex flex-col items-center py-8 gap-6 shadow-2xl">
-        <img src={mapsWhiteLogo} alt="MAPS icon" className="h-[30px] w-[30px] object-contain" />
-        
-        <div className="flex-1 flex flex-col gap-4 pt-8">
-          <button 
-            onClick={() => {
-              setActiveView("dashboard");
-              setShowKeywordsTree(false);
-            }}
-            className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-lg ${
-              activeView === "dashboard" ? "bg-white" : "bg-white/10 hover:bg-white/20 hover:scale-110"
-            }`}
-          >
-            <LayoutDashboard className={`w-6 h-6 ${activeView === "dashboard" ? "text-indigo-600" : "text-white"}`} />
-          </button>
-          {isClinicalEnabled && (
-            <button 
-              onClick={() => {
-                setActiveView("timeline");
-                setShowKeywordsTree(false);
-                setDiscoveryTab("timeline");
-                if (cohortPatientIds.length > 0) {
-                  setTrialDiscoverySidebarOpen(true);
-                  setTrialKeywordCanvasPatientId((prev) => prev ?? selectedPatient?.id ?? cohortPatientIds[0] ?? null);
-                }
-              }}
-              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-lg ${
-                (activeView === "timeline" || showKeywordsTree) ? "bg-white" : "bg-white/10 hover:bg-white/20 hover:scale-110"
-              }`}
-            >
-              <CalendarIcon className={`w-6 h-6 ${(activeView === "timeline" || showKeywordsTree) ? "text-indigo-600" : "text-white"}`} />
-            </button>
-          )}
-          {isResearchEnabled && (
-            <button
-              onClick={() => {
-                setClinicalTrialsNav({ listTab: "all", focusTrialId: null });
-                setActiveView("trials");
-              }}
-              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-                activeView === "trials" ? "bg-white shadow-lg" : "bg-white/10 hover:bg-white/20 hover:scale-110"
-              } group`}
-            >
-              <FileText className={`w-6 h-6 ${activeView === "trials" ? "text-indigo-600" : "text-white"}`} />
-            </button>
-          )}
-          {isResearchEnabled && (
-            <button 
-              onClick={() => setActiveView("research")}
-              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-                activeView === "research" ? "bg-white shadow-lg" : "bg-white/10 hover:bg-white/20 hover:scale-110"
-              } group`}
-            >
-              <Activity className={`w-6 h-6 ${activeView === "research" ? "text-indigo-600" : "text-white"}`} />
-            </button>
-          )}
-          {/* AI nav button hidden for now */}
-        </div>
+  const navMenuItemClass = (active = false) =>
+    `flex w-full items-center gap-3 px-3 py-2.5 text-left text-[15.5px] font-medium transition-colors ${
+      active ? "rounded-full bg-blue-100 text-blue-700" : "rounded-xl text-slate-700 hover:bg-slate-100"
+    }`;
 
+  return (
+    <div className="relative flex h-screen bg-slate-50">
+      <div className="absolute left-5 top-5 z-[80] flex items-center gap-3">
+        <Popover open={isNavMenuOpen} onOpenChange={setIsNavMenuOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className={`flex h-12 w-12 items-center justify-center rounded-full shadow-2xl shadow-indigo-900/20 ring-1 ring-white/30 transition ${
+                isNavMenuOpen
+                  ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                  : "bg-indigo-600 text-white hover:bg-indigo-700"
+              }`}
+              aria-label="Open navigation menu"
+            >
+              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path d="M5 7h14M5 12h14M5 17h14" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" />
+              </svg>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-72 rounded-2xl border border-black/10 bg-white/95 p-2 shadow-2xl backdrop-blur-xl" side="bottom" align="start" sideOffset={10}>
+            <div className="space-y-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveView("dashboard");
+                  setShowKeywordsTree(false);
+                  setIsNavMenuOpen(false);
+                }}
+                className={navMenuItemClass(activeView === "dashboard" && !showKeywordsTree)}
+              >
+                <LayoutDashboard className="h-[19px] w-[19px]" />
+                Dashboard
+              </button>
+              {isClinicalEnabled && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveView("timeline");
+                    setShowKeywordsTree(false);
+                    setDiscoveryTab("timeline");
+                    if (cohortPatientIds.length > 0) {
+                      setTrialDiscoverySidebarOpen(true);
+                      setTrialKeywordCanvasPatientId((prev) => prev ?? selectedPatient?.id ?? cohortPatientIds[0] ?? null);
+                    }
+                    setIsNavMenuOpen(false);
+                  }}
+                  className={navMenuItemClass(activeView === "timeline" && !showKeywordsTree)}
+                >
+                  <CalendarIcon className="h-[19px] w-[19px]" />
+                  Discovery Timeline
+                </button>
+              )}
+              {isClinicalEnabled && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowKeywordsTree(true);
+                    setActiveView("timeline");
+                    setDiscoveryTab("keywords");
+                    setIsNavMenuOpen(false);
+                  }}
+                  className={navMenuItemClass(showKeywordsTree)}
+                >
+                  <Layers3 className="h-[19px] w-[19px]" />
+                  Keyword Tree
+                </button>
+              )}
+              {isResearchEnabled && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveView("research");
+                    setIsNavMenuOpen(false);
+                  }}
+                  className={navMenuItemClass(activeView === "research")}
+                >
+                  <Activity className="h-[19px] w-[19px]" />
+                  Trending Research
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <button
+                type="button"
+                onClick={() => {
+                  if (isDoctorFeedOpen) closeDoctorFeed();
+                  else setIsDoctorFeedOpen(true);
+                  setIsNavMenuOpen(false);
+                }}
+                className={navMenuItemClass(isDoctorFeedOpen)}
+              >
+                <UsersRound className="h-[19px] w-[19px]" />
+                Doctor Network
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsProfileOpen(true);
+                  setIsNavMenuOpen(false);
+                }}
+                className={navMenuItemClass(false)}
+              >
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-violet-300 text-xs font-bold text-white">
+                  {profile?.avatar_initials || 'U'}
+                </span>
+                My Profile
+              </button>
+            </div>
+
+          </PopoverContent>
+        </Popover>
         <button
           type="button"
-          onClick={() => {
-            if (isDoctorFeedOpen) {
-              closeDoctorFeed();
-            } else {
-              setIsDoctorFeedOpen(true);
-            }
-          }}
-          className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-            isDoctorFeedOpen ? "bg-white shadow-lg scale-105" : "bg-white/10 hover:bg-white/20 hover:scale-110"
-          }`}
-          title="Doctor Network"
-        >
-          <UsersRound className={`w-6 h-6 ${isDoctorFeedOpen ? "text-indigo-600" : "text-white"}`} />
-        </button>
-
-        <button
-          onClick={() => {
-            setIsGlobalQuantumOpen(true);
-          }}
-          className="w-12 h-12 rounded-xl flex items-center justify-center transition-all bg-white/10 hover:bg-white/20 hover:scale-110"
+          onClick={() => setIsGlobalQuantumOpen(true)}
+          className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white/85 text-sky-400 shadow-lg ring-1 ring-black/10 backdrop-blur-xl transition hover:bg-sky-50 hover:text-sky-500"
           title="Quantum Analysis"
+          aria-label="Open Quantum Analysis"
         >
-          <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <circle cx="12" cy="12" r="2" fill="currentColor" />
             <ellipse cx="12" cy="12" rx="10" ry="4" strokeWidth="1.5" />
             <ellipse cx="12" cy="12" rx="10" ry="4" strokeWidth="1.5" transform="rotate(60 12 12)" />
             <ellipse cx="12" cy="12" rx="10" ry="4" strokeWidth="1.5" transform="rotate(120 12 12)" />
           </svg>
         </button>
-
-        <button
-          type="button"
-          onClick={() => setIsCriteriaMatchingOpen((v) => !v)}
-          className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-            isCriteriaMatchingOpen ? "bg-white shadow-lg scale-105" : "bg-white/10 hover:bg-white/20 hover:scale-110"
-          }`}
-          title="Clinical Trials"
-        >
-          <ListFilter className={`w-6 h-6 ${isCriteriaMatchingOpen ? "text-indigo-600" : "text-white"}`} />
-        </button>
-
-        <div ref={scopePickerRef} className="relative">
-          <button
-            onClick={() => setIsScopePickerOpen((prev) => !prev)}
-            className="w-12 h-12 rounded-xl flex items-center justify-center transition-all bg-white/10 hover:bg-white/20 hover:scale-110"
-            title="Feature scope"
-          >
-            <SlidersHorizontal className="w-6 h-6 text-white" />
-          </button>
-          {isScopePickerOpen && (
-            <div className="absolute left-full ml-3 bottom-0 bg-white rounded-xl border border-gray-200 shadow-xl p-2 min-w-[180px] z-30">
-              <p className="text-[11px] text-gray-500 px-2 pb-1">Feature Scope</p>
-              {renderFeatureScopeToggle()}
-            </div>
-          )}
-        </div>
+        <span className="inline-flex items-center gap-2 rounded-full bg-white/85 px-4 py-2 text-base font-semibold tracking-[0.28em] text-slate-900 shadow-lg ring-1 ring-black/10 backdrop-blur-xl">
+          <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <defs>
+              <linearGradient id="maps-layer-gradient" x1="3" y1="3" x2="21" y2="21" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#2563eb" />
+                <stop offset="1" stopColor="#f97316" />
+              </linearGradient>
+            </defs>
+            <path d="m12 2 9 5-9 5-9-5 9-5Z" stroke="url(#maps-layer-gradient)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="m3 12 9 5 9-5" stroke="url(#maps-layer-gradient)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="m3 17 9 5 9-5" stroke="url(#maps-layer-gradient)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          M.A.P.S.
+        </span>
       </div>
 
       {/* Main Content */}
@@ -1222,16 +1190,23 @@ export default function CancerTreatmentDashboard({
             <div className="flex-1 min-w-0 min-h-0 flex flex-col">
               <div className="flex-1 min-w-0 bg-slate-50 min-h-0">
                 {keywordTree ? (
-                  <KeywordTree
+                  <InfiniteKeywordCanvasView
                     tree={keywordTree}
-                    onNodeClick={setSelectedTreeNode}
-                    selectedNodeId={selectedTreeNode?.id ?? null}
+                    patient={selectedPatient ?? null}
+                    selectedNode={selectedTreeNode}
                     hoveredNodeId={keywordTreeHoveredNode?.id ?? null}
+                    dimmedNodeIds={keywordTreeDimmedIds}
+                    viewportVisibleNodeIds={keywordTreeViewportVisibleIds}
+                    interactionIdleTick={keywordTreeInteractionIdleTick}
+                    onSelectNode={setSelectedTreeNode}
                     onNodeHover={onKeywordTreeHover}
                     onInteractionIdle={onKeywordTreeInteractionIdle}
-                    dimmedNodeIds={keywordTreeDimmedIds}
                     onVisibleNodeIdsChange={onKeywordTreeVisibleIdsChange}
-                    className="w-full h-full min-h-0"
+                    onToggleDimmedKeyword={toggleKeywordTreeDimmed}
+                    onResetDimmedKeywords={resetKeywordTreeDimmed}
+                    onOpenChart={openGlobalChart}
+                    onSelectPatient={onChangePatient}
+                    onOpenNews={() => setIsNewsFeedOpen(true)}
                   />
                 ) : (
                   <div className="h-full flex items-center justify-center text-slate-400 text-sm">
@@ -1239,33 +1214,7 @@ export default function CancerTreatmentDashboard({
                   </div>
                 )}
               </div>
-              {keywordTree ? (
-                <div className="shrink-0 h-[min(510px,65vh)] min-h-[370px] border-t border-slate-200 bg-white">
-                  <KeywordTreeDiscoveryChat
-                    tree={keywordTree}
-                    patientId={selectedPatient?.id ?? null}
-                    patientName={selectedPatient?.name ?? null}
-                    hoveredNode={keywordTreeHoveredNode}
-                    viewportVisibleIds={keywordTreeViewportVisibleIds}
-                    interactionIdleTick={keywordTreeInteractionIdleTick}
-                  />
-                </div>
-              ) : null}
             </div>
-            {keywordTree ? (
-              <div className="w-[min(580px,40vw)] shrink-0 max-h-full min-h-0 flex flex-col border-l border-slate-200">
-                <KeywordTreePubmedPanel
-                  patient={selectedPatient ?? null}
-                  keywordTreeFull={keywordTree}
-                  selectedNode={selectedTreeNode}
-                  viewportVisibleNodeIds={keywordTreeViewportVisibleIds}
-                  dimmedNodeIds={keywordTreeDimmedIds}
-                  onToggleDimmedKeyword={toggleKeywordTreeDimmed}
-                  onResetDimmedKeywords={resetKeywordTreeDimmed}
-                  onClose={() => setSelectedTreeNode(null)}
-                />
-              </div>
-            ) : null}
           </div>
         ) : activeView === "dashboard" ? (
           <DashboardPage
@@ -1297,138 +1246,6 @@ export default function CancerTreatmentDashboard({
           />
         ) : activeView === "timeline" ? (
           <>
-            {/* Discovery header — same height for Timeline vs Keywords (tabs row only); divider matches keyword sub-panels */}
-            <div className="bg-white relative z-10 shrink-0 shadow-sm border-b border-gray-200">
-              <div className="px-8 py-6">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h1 className="text-[27px] font-medium text-gray-900 mb-1">Discovery</h1>
-                    {selectedPatient ? (
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-gray-500 text-base mt-1">
-                        {onChangePatient && (
-                          <button
-                            type="button"
-                            onClick={onChangePatient}
-                            className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-medium border border-indigo-200 transition-colors mr-1"
-                          >
-                            <UserRound className="w-3.5 h-3.5" />
-                            Change Patient
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-gray-500">Track treatment progress and key milestones</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="relative w-96">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="Search timeline"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-full focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      />
-                      {searchQuery && (
-                        <button
-                          onClick={() => setSearchQuery("")}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors"
-                        >
-                          <X className="w-4 h-4 text-gray-600" />
-                        </button>
-                      )}
-                    </div>
-                    {renderHeaderActions()}
-                  </div>
-                </div>
-                
-                {/* Discovery Tabs + Keywords actions */}
-                <div className="flex items-center justify-between pb-1">
-                  <div className="flex items-center gap-1">
-                    {(["timeline", "keywords"] as const).map((tab) => (
-                      <button
-                        key={tab}
-                        onClick={() => {
-                          if (tab === "keywords") {
-                            openTrialDiscoveryKeywordsView();
-                          } else {
-                            setDiscoveryTab("timeline");
-                            if (cohortPatientIds.length > 0) {
-                              setTrialDiscoverySidebarOpen(true);
-                              setTrialKeywordCanvasPatientId((prev) =>
-                                prev ?? selectedPatient?.id ?? cohortPatientIds[0] ?? null
-                              );
-                            }
-                          }
-                        }}
-                        className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all capitalize ${
-                          discoveryTab === tab
-                            ? "bg-indigo-600 text-white shadow-sm"
-                            : "bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200"
-                        }`}
-                      >
-                        {tab === "timeline" ? "Timeline" : "Keywords"}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {compareSelectedPatients.length >= 2 && (
-                      <button
-                        onClick={() => setIsComparisonViewOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full transition-colors"
-                      >
-                        <PanelRightOpen className="w-4 h-4" />
-                        Side by Side
-                      </button>
-                    )}
-                    {discoveryTab === "keywords" && trialDiscoverySidebarOpen && (
-                      <button
-                        type="button"
-                        disabled={!trialKeywordCanvasPatient}
-                        onClick={() => {
-                          if (trialKeywordCanvasPatient) {
-                            setQualificationPanelPatient(trialKeywordCanvasPatient);
-                            setIsQualificationPanelOpen(true);
-                          }
-                        }}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors disabled:opacity-50 disabled:pointer-events-none"
-                      >
-                        <FileText className="w-4 h-4" />
-                        Clinical Trial Qualification
-                      </button>
-                    )}
-                    <button
-                      onClick={openGlobalChart}
-                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
-                    >
-                      <FileText className="w-4 h-4" />
-                      Open Chart
-                    </button>
-                    {isResearchEnabled && (
-                      <button
-                        onClick={() => setIsNewsFeedOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-full transition-colors"
-                      >
-                        <Newspaper className="w-4 h-4" />
-                        News Feed
-                      </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        setIsAIPanelOpen(true);
-                        setTimeout(() => setIsAIPanelVisible(true), 10);
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      Ask AI
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             {/* Keywords tab — multi-patient + sidebar: FDA trial canvas; otherwise 6-column category graph (single-patient keeps WaveVisualization even with sidebar) */}
             {discoveryTab === "keywords" && (
               <div
@@ -1456,16 +1273,23 @@ export default function CancerTreatmentDashboard({
                       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
                         <div className="flex-1 min-w-0 bg-slate-50 min-h-0">
                           {keywordTree ? (
-                            <KeywordTree
+                            <InfiniteKeywordCanvasView
                               tree={keywordTree}
-                              onNodeClick={setSelectedTreeNode}
-                              selectedNodeId={selectedTreeNode?.id ?? null}
+                              patient={selectedPatient ?? null}
+                              selectedNode={selectedTreeNode}
                               hoveredNodeId={keywordTreeHoveredNode?.id ?? null}
+                              dimmedNodeIds={keywordTreeDimmedIds}
+                              viewportVisibleNodeIds={keywordTreeViewportVisibleIds}
+                              interactionIdleTick={keywordTreeInteractionIdleTick}
+                              onSelectNode={setSelectedTreeNode}
                               onNodeHover={onKeywordTreeHover}
                               onInteractionIdle={onKeywordTreeInteractionIdle}
-                              dimmedNodeIds={keywordTreeDimmedIds}
                               onVisibleNodeIdsChange={onKeywordTreeVisibleIdsChange}
-                              className="w-full h-full min-h-0"
+                              onToggleDimmedKeyword={toggleKeywordTreeDimmed}
+                              onResetDimmedKeywords={resetKeywordTreeDimmed}
+                              onOpenChart={openGlobalChart}
+                              onSelectPatient={onChangePatient}
+                              onOpenNews={() => setIsNewsFeedOpen(true)}
                             />
                           ) : (
                             <div className="h-full flex items-center justify-center text-slate-400 text-sm">
@@ -1473,33 +1297,7 @@ export default function CancerTreatmentDashboard({
                             </div>
                           )}
                         </div>
-                        {keywordTree ? (
-                          <div className="shrink-0 h-[min(510px,65vh)] min-h-[370px] border-t border-slate-200 bg-white">
-                            <KeywordTreeDiscoveryChat
-                              tree={keywordTree}
-                              patientId={selectedPatient?.id ?? null}
-                              patientName={selectedPatient?.name ?? null}
-                              hoveredNode={keywordTreeHoveredNode}
-                              viewportVisibleIds={keywordTreeViewportVisibleIds}
-                              interactionIdleTick={keywordTreeInteractionIdleTick}
-                            />
-                          </div>
-                        ) : null}
                       </div>
-                      {keywordTree ? (
-                        <div className="w-[min(580px,40vw)] shrink-0 max-h-full min-h-0 flex flex-col border-l border-slate-200">
-                          <KeywordTreePubmedPanel
-                            patient={selectedPatient ?? null}
-                            keywordTreeFull={keywordTree}
-                            selectedNode={selectedTreeNode}
-                            viewportVisibleNodeIds={keywordTreeViewportVisibleIds}
-                            dimmedNodeIds={keywordTreeDimmedIds}
-                            onToggleDimmedKeyword={toggleKeywordTreeDimmed}
-                            onResetDimmedKeywords={resetKeywordTreeDimmed}
-                            onClose={() => setSelectedTreeNode(null)}
-                          />
-                        </div>
-                      ) : null}
                     </div>
                   )}
                 </div>
@@ -1522,16 +1320,148 @@ export default function CancerTreatmentDashboard({
 
             {/* Timeline + cohort sidebar — time range & chips sit in left column only so sidebar aligns with Keywords view */}
             {discoveryTab === "timeline" && (
-              <div
-                className={`flex-1 overflow-hidden flex min-h-0 ${
-                  trialDiscoverySidebarOpen
-                    ? "flex-col lg:flex-row bg-gradient-to-br from-slate-50 to-violet-50/40"
-                    : "flex-col"
-                }`}
-              >
-              <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-white">
-                <div className="shrink-0 px-5 py-4 lg:px-8">
+              <div className="relative h-full min-h-0 overflow-hidden bg-[#f7f6f3] text-slate-950">
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_40%,#fbfaf6_0%,#f4f2ec_60%,#ecead1_100%)]" />
+                <div
+                  className="pointer-events-none absolute inset-[-2000px] opacity-70"
+                  style={{
+                    backgroundImage: "radial-gradient(rgba(20,20,20,0.08) 1px, transparent 1px)",
+                    backgroundSize: "24px 24px",
+                  }}
+                />
+
+                <aside className="absolute left-5 top-[84px] z-20 flex h-[min(540px,calc(100%_-_104px))] w-[380px] flex-col overflow-hidden rounded-[20px] border border-black/10 bg-white/85 shadow-2xl backdrop-blur-xl">
+                  <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-600 shadow-[0_0_0_4px_#ece6ff]">
+                      <Sparkles className="h-4 w-4 animate-pulse text-white" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-base font-semibold">Clinical Intelligence</p>
+                      <p className="truncate text-sm text-slate-500">
+                        {timelinePatientForData ? `Timeline context for ${timelinePatientForData.name}` : 'Select a patient to begin'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+                    <div className="rounded-2xl bg-violet-50 p-4 ring-1 ring-violet-100">
+                      <p className="mb-2 font-mono text-[12px] font-semibold uppercase tracking-wide text-violet-600">
+                        Timeline Scope
+                      </p>
+                      <p className="text-sm leading-relaxed text-slate-700">
+                        {timelinePatientForData
+                          ? `${timelinePatientForData.diagnoses[0]} timeline with ${visibleMonths.length} visible month${visibleMonths.length === 1 ? '' : 's'} and ${selectedKeyword ? `${selectedKeyword} filtering applied` : 'all categories shown'}.`
+                          : 'Choose a patient to load longitudinal events.'}
+                      </p>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {[
+                        `${filteredData.diagnosis.length + filteredData.treatment.length + filteredData.monitoring.length + filteredData.sideEffects.length + filteredData.labs.length + filteredData.documentation.length} visible timeline events`,
+                        selectedKeyword ? `Keyword filter: ${selectedKeyword}` : 'No keyword filter active',
+                        activeTimeRange === 'custom' && customDateRange.from && customDateRange.to
+                          ? `Custom range: ${format(customDateRange.from, 'MMM d')} to ${format(customDateRange.to, 'MMM d')}`
+                          : `Range: ${activeTimeRange}`,
+                      ].map((item) => (
+                        <div key={item} className="rounded-2xl bg-white/80 p-3 text-sm leading-relaxed text-slate-600 ring-1 ring-slate-100">
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="border-t border-slate-100 px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAIPanelOpen(true);
+                        setTimeout(() => setIsAIPanelVisible(true), 10);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-500 transition hover:border-violet-300 hover:text-violet-700"
+                    >
+                      <span className="min-w-0 flex-1 truncate">Ask about this timeline...</span>
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white">
+                        <Send className="h-4 w-4" />
+                      </span>
+                    </button>
+                  </div>
+                </aside>
+
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={openGlobalChart}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      openGlobalChart();
+                    }
+                  }}
+                  className="absolute right-5 top-5 z-20 h-[116px] w-[380px] rounded-[20px] border border-black/10 bg-white/85 p-4 text-left shadow-2xl backdrop-blur-xl transition hover:border-violet-200 hover:bg-white/95"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-300 text-base font-semibold text-white">
+                      {timelinePatientForData?.name.split(' ').map((n) => n[0]).join('').slice(0, 2) ?? 'PT'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-lg font-semibold">{timelinePatientForData?.name ?? 'No patient selected'}</p>
+                      <p className="truncate text-sm text-slate-500">
+                        {timelinePatientForData ? `${timelinePatientForData.age}yo ${timelinePatientForData.gender} · MRN ${timelinePatientForData.mrn}` : 'Open patient selection'}
+                      </p>
+                    </div>
+                  </div>
+                  {timelinePatientForData ? (
+                    <div className="mt-3 flex items-end justify-between gap-3">
+                      <span className="inline-flex min-w-0 rounded-full bg-pink-100 px-3 py-1 text-sm font-medium text-pink-900">
+                        <span className="truncate">{timelinePatientForData.diagnoses[0]}</span>
+                      </span>
+                      {onChangePatient ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onChangePatient();
+                          }}
+                          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-violet-700"
+                        >
+                          <UserRound className="h-3.5 w-3.5" />
+                          Change Patient
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+
+                <aside className="absolute left-[420px] right-[420px] top-5 z-20 flex h-[116px] flex-col justify-center overflow-hidden rounded-[20px] border border-black/10 bg-white/85 p-4 shadow-2xl backdrop-blur-xl">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-base font-semibold">Keywords</p>
+                      <p className="text-sm text-slate-500">
+                        {selectedKeyword ? `Filtering by ${selectedKeyword}` : 'Filter timeline events by clinical keyword'}
+                      </p>
+                    </div>
+                    {selectedKeyword ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedKeyword(null)}
+                        className="shrink-0 rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700 transition hover:bg-violet-100"
+                      >
+                        Clear
+                      </button>
+                    ) : null}
+                  </div>
+                  <TimelineKeywordChipsScroll
+                    keywordList={keywords}
+                    selectedKeyword={selectedKeyword}
+                    onSelectKeyword={setSelectedKeyword}
+                    onClear={() => setSelectedKeyword(null)}
+                  />
+                </aside>
+
+                <div className="relative z-30 h-full overflow-y-auto pb-5 pl-[420px] pr-5 pt-[172px]">
+              <div className="flex max-h-[calc(100vh-194px)] w-full flex-col overflow-hidden rounded-[28px] border border-black/10 bg-white/80 shadow-2xl backdrop-blur-xl">
+                <div className="shrink-0 px-5 py-4 lg:px-6">
                   <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">Discovery Timeline</h1>
+                    </div>
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
                         {(["1m", "3m", "6m", "1y"] as const).map((range) => (
@@ -1619,18 +1549,10 @@ export default function CancerTreatmentDashboard({
                     </div>
                   </div>
                 </div>
-                <div className="shrink-0 px-5 py-3 lg:px-8">
-                  <TimelineKeywordChipsScroll
-                    keywordList={keywords}
-                    selectedKeyword={selectedKeyword}
-                    onSelectKeyword={setSelectedKeyword}
-                    onClear={() => setSelectedKeyword(null)}
-                  />
-                </div>
-                <div className="flex-1 min-h-0 overflow-auto bg-white">
-              <div className="px-5 py-3 lg:px-8 lg:py-5">
+                <div className="max-h-[calc(100vh-330px)] overflow-auto bg-white/65">
+              <div className="min-w-[920px] px-5 py-3 lg:px-6 lg:py-5">
                 {/* Date Headers */}
-                <div className="flex items-center mb-8">
+                <div className="mb-6 flex items-center border-b border-slate-200 pb-6">
                   <div className="w-40" /> {/* Spacer for row labels */}
                   {activeTimeRange === "custom" && customDateRange.from && customDateRange.to ? (
                     <div className="flex-1 relative h-10 px-8">
@@ -1685,7 +1607,7 @@ export default function CancerTreatmentDashboard({
                 {/* Timeline Rows */}
                 <div className="space-y-0">
                   {/* Diagnosis Row */}
-                  <div className="border-b border-gray-200 py-6">
+                  <div className="py-6">
                     <div className="flex items-center">
                       <div className="w-40 pr-6">
                         <h3 className="text-gray-900 mb-1">Diagnosis</h3>
@@ -1713,7 +1635,7 @@ export default function CancerTreatmentDashboard({
                                   <div className="w-4 h-4 bg-purple-600 rounded-full shadow-lg group-hover:scale-150 transition-transform relative z-10" />
                                 </button>
                               </PopoverTrigger>
-                              <PopoverContent className="w-96" side="top" align="center">
+                              <PopoverContent className="w-96" side="bottom" align="center">
                                 <div className="space-y-3">
                                   <div className="flex items-start justify-between">
                                     <div className="flex-1">
@@ -1960,7 +1882,7 @@ export default function CancerTreatmentDashboard({
                   </div>
 
                   {/* Documents Row */}
-                  <div className="border-b border-gray-200 py-6">
+                  <div className="py-6">
                     <div className="flex items-center">
                       <div className="w-40 pr-6">
                         <h3 className="text-gray-900 mb-1">Documents</h3>
@@ -2013,19 +1935,7 @@ export default function CancerTreatmentDashboard({
               </div>
               </div>
 
-                {trialDiscoverySidebarOpen && (
-                  <div className="w-full lg:w-[min(420px,40vw)] shrink-0 flex flex-col min-h-0 max-h-[45vh] lg:max-h-none">
-                    <QualifiedTrialPatientsSidebar
-                      patients={
-                        cohortPatientsList.length > 0 ? cohortPatientsList : trialQualifiedPatientsList
-                      }
-                      selectedPatientId={trialKeywordCanvasPatientId}
-                      onSelectPatient={(id) => {
-                        setTrialKeywordCanvasPatientId(id);
-                      }}
-                    />
-                  </div>
-                )}
+              </div>
               </div>
             )}
           </>
@@ -2066,25 +1976,10 @@ export default function CancerTreatmentDashboard({
           <div className="relative h-full">
             <TrendingResearchPage
               onClose={() => setActiveView(getDefaultViewForScope(featureScope))}
-              headerActions={<div className="flex items-center gap-3">{renderHeaderActions()}</div>}
-              tabRowActions={<>
-                <button
-                  onClick={openGlobalChart}
-                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
-                >
-                  <FileText className="w-4 h-4" />
-                  Open Chart
-                </button>
-                <button
-                  onClick={() => { setIsAIPanelOpen(true); setTimeout(() => setIsAIPanelVisible(true), 10); }}
-                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  Ask AI
-                </button>
-              </>}
               selectedPatient={selectedPatient}
               onChangePatient={onChangePatient}
+              onOpenChart={openGlobalChart}
+              onAskAI={() => { setIsAIPanelOpen(true); setTimeout(() => setIsAIPanelVisible(true), 10); }}
             />
           </div>
         ) : (
@@ -2371,21 +2266,23 @@ export default function CancerTreatmentDashboard({
       {/* Global Quantum Side Panel */}
       <QuantumPanel isOpen={isGlobalQuantumOpen} onClose={() => setIsGlobalQuantumOpen(false)} />
 
-      {/* Global Patient Chart Side Panel (used by Clinical Trials, Trending Research) */}
+      {/* Global Patient Chart Side Panel */}
       {isGlobalChartOpen && (
         <>
-          <div
-            className={`fixed inset-0 bg-black/30 z-40 transition-opacity duration-300 ${isGlobalChartVisible ? "opacity-100" : "opacity-0"}`}
+          <button
+            type="button"
+            aria-label="Close patient chart"
+            className={`fixed inset-0 bg-black/20 z-40 transition-opacity duration-300 ${isGlobalChartVisible ? "opacity-100" : "opacity-0"}`}
             onClick={closeGlobalChart}
           />
-          <div
-            className={`fixed top-0 right-0 h-full w-1/2 bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-out ${isGlobalChartVisible ? "translate-x-0" : "translate-x-full"}`}
+          <aside
+            className={`fixed top-0 right-0 h-full w-[50vw] min-w-[480px] bg-white/95 shadow-[-24px_0_64px_rgba(15,23,42,0.16)] backdrop-blur-2xl z-50 flex flex-col border-l border-black/10 transition-transform duration-300 ease-out ${isGlobalChartVisible ? "translate-x-0" : "translate-x-full"}`}
           >
-            <PatientChartPage
+            <PatientChartSidePanel
               selectedPatient={patientForGlobalChartPanel}
-              onBack={closeGlobalChart}
+              onClose={closeGlobalChart}
             />
-          </div>
+          </aside>
         </>
       )}
 
